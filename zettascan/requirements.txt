@@ -1,0 +1,11 @@
+# Dependências do módulo ZettaScan
+# Atualizado em: 2026-07-14 (auditoria de segurança)
+
+google-generativeai==0.8.3
+httpx==0.27.0
+python-dotenv==1.0.1
+semgrep==1.90.0
+fastapi==0.139.0
+uvicorn==0.49.0
+pygithub==2.4.0
+pydantic==2.9.2
