@@ -1,0 +1,19 @@
+# Nunca sobe esses arquivos pro GitHub
+.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+venv/
+.venv/
+repos_temp/
+*.egg-info/
+dist/
+build/
+
+# Arquivo de saída do teste local (não faz parte do código)
+resultado_teste.json
+
+# Rulesets fixados localmente (gerados por baixar_rulesets.py)
+# São grandes (~1.3 MB) e podem ser regenerados com: python baixar_rulesets.py
+rulesets/
