@@ -1,0 +1,34 @@
+# .dockerignore — exclui arquivos desnecessários do contexto de build Docker
+
+# Secrets
+.env
+*.env
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtualenv local
+.venv/
+venv/
+
+# Dados temporários
+repos_temp/
+resultado_teste.json
+
+# Testes
+test_*.py
+testar_chaves.py
+.pytest_cache/
+
+# IDEs
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
