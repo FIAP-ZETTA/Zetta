@@ -1,0 +1,46 @@
+# ── Secrets e variáveis de ambiente ──────────────────────────────────────────
+.env
+*.env
+!.env.example       # .env.example é seguro para commitar (sem valores reais)
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ── Testes e cobertura ────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+
+# ── Dados temporários do ZettaScan ───────────────────────────────────────────
+repos_temp/
+resultado_teste.json
+*.log
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+# (docker-compose.yml e Dockerfiles SÃO commitados — apenas ignorar overrides locais)
+docker-compose.override.yml
+
+# ── IDEs ──────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
