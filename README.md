@@ -20,6 +20,24 @@ O Zetta Guard é composto por três módulos principais que trabalham juntos.
 
 ---
 
+## 🚀 Como Rodar o Projeto (1 Clique)
+
+Para facilitar para todo o time, criamos um inicializador automático:
+
+### No Windows:
+Basta dar **duplo clique** no arquivo **`iniciar.bat`** na raiz do projeto (ou rodar `.\iniciar.ps1` no PowerShell).
+
+O script faz tudo sozinho:
+1. Instala as dependências Python do **ZettaScan** e inicia a API em `http://localhost:8000`.
+2. Instala os pacotes do **ZettaDash** e sobe o painel web em `http://localhost:3000`.
+3. Abre automaticamente o navegador na tela principal.
+
+> **Pré-requisitos mínimos no PC do desenvolvedor:**
+> - [Python 3.11+](https://www.python.org/downloads/)
+> - [Node.js LTS](https://nodejs.org) (necessário para rodar o painel visual React/Next.js)
+
+---
+
 ## Tecnologias utilizadas
 
 ### Backend

@@ -1,3 +1,51 @@
-FROM node:18
+# ── Stage 1: deps — instala dependências com pnpm ──────────────────────────────
+FROM node:20-slim AS deps
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
 WORKDIR /app
-CMD ["echo", "Frontend em construção"]
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# ── Stage 2: builder — faz o build do Next.js ─────────────────────────────────
+FROM node:20-slim AS builder
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+WORKDIR /app
+
+# Copia dependências já instaladas
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# URL do ZettaScan injetada em build-time como variável de ambiente
+ARG NEXT_PUBLIC_ZETTASCAN_URL=http://zettascan:8000
+ENV NEXT_PUBLIC_ZETTASCAN_URL=$NEXT_PUBLIC_ZETTASCAN_URL
+
+RUN pnpm build
+
+# ── Stage 3: runtime — imagem final enxuta ────────────────────────────────────
+FROM node:20-slim AS runtime
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+# Copia apenas o necessário para rodar
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
+CMD ["node", "server.js"]

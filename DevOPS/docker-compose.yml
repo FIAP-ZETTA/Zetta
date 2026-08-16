@@ -9,10 +9,8 @@ services:
   # ── ZettaScan — Motor de análise de segurança ─────────────────────────────
   zettascan:
     build:
-      # O contexto é a pasta do código-fonte
       context: ../zettascan
-      # O Dockerfile é o arquivo que está aqui na pasta DevOPS
-      dockerfile: Dockerfile.zettascan
+      dockerfile: ../DevOPS/Dockerfile.zettascan
     restart: unless-stopped
     networks:
       - zetta_net
@@ -21,13 +19,36 @@ services:
     # Puxa o .env da raiz do projeto
     env_file: ../.env
     environment:
-      # A chave Gemini virá do env_file
       PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
 
   # ── ZettaDash — Frontend Dashboard ─────────────────────────────────────────
   zettadash:
     build:
       context: ../zettadash
-      dockerfile: Dockerfile.zettadash
+      dockerfile: ../DevOPS/Dockerfile.zettadash
+      args:
+        # Dentro da rede Docker, zettadash chama zettascan pelo nome do serviço
+        NEXT_PUBLIC_ZETTASCAN_URL: http://zettascan:8000
+    restart: unless-stopped
     networks:
       - zetta_net
+    ports:
+      - "3000:3000"
+    depends_on:
+      zettascan:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_ZETTASCAN_URL: http://zettascan:8000
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
