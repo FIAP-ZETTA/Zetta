@@ -20,18 +20,14 @@ import {
   getActiveRepoUrl,
   getSavedRepositories,
   type ScanResponse,
-  type Vulnerabilidade,
 } from "@/lib/zettascan-api"
 import { useLanguage } from "@/lib/language-provider"
 import {
   BarChart3,
   PieChart as PieIcon,
   LineChart as AreaIcon,
-  ShieldAlert,
   ArrowRight,
-  Layers,
   Sparkles,
-  GitBranch,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -47,29 +43,29 @@ interface ItemData {
   sub?: string
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
   const item = payload[0]
   const data = item.payload as ItemData
 
   return (
-    <div className="border border-border bg-card p-3 text-xs shadow-2xl text-card-foreground">
+    <div className="border border-border bg-card p-3 rounded-xl text-xs shadow-2xl text-card-foreground space-y-1">
       <div className="flex items-center gap-2 mb-1">
-        <span className="h-2.5 w-2.5 shrink-0" style={{ background: data.fill }} />
+        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: data.fill }} />
         <p className="font-bold text-foreground uppercase tracking-wider">{data.label}</p>
       </div>
-      <div className="flex items-center justify-between gap-4 text-muted-foreground mt-1 text-[11px]">
-        <span>Achados / Findings:</span>
+      <div className="flex items-center justify-between gap-4 text-muted-foreground text-[11px]">
+        <span>Achados:</span>
         <span className="font-mono font-bold text-foreground text-xs">{data.count}</span>
       </div>
       {data.percent !== undefined && (
-        <div className="flex items-center justify-between gap-4 text-muted-foreground mt-0.5 text-[11px]">
-          <span>Proporção / Share:</span>
+        <div className="flex items-center justify-between gap-4 text-muted-foreground text-[11px]">
+          <span>Proporção:</span>
           <span className="font-mono font-bold text-primary text-xs">{data.percent}%</span>
         </div>
       )}
       {data.sub && (
-        <p className="text-[10px] text-muted-foreground/70 mt-1 border-t border-border/50 pt-1">
+        <p className="text-[10px] text-muted-foreground mt-1 border-t border-border/50 pt-1">
           {data.sub}
         </p>
       )}
@@ -127,21 +123,21 @@ export function AdvancedCharts() {
       {
         label: t.scan.low,
         count: scanResult.baixas,
-        fill: "#00e5ff",
+        fill: "#38bdf8",
         percent: Math.round((scanResult.baixas / total) * 100),
       },
     ]
   }, [scanResult, t])
 
-  // 2. Dados por Categorias OWASP / Vetores de Falha
+  // 2. Dados por Categoria / Tipo de Vulnerabilidade
   const categoryData = useMemo<ItemData[]>(() => {
-    if (!scanResult || scanResult.vulnerabilidades.length === 0) return []
+    if (!scanResult || !scanResult.vulnerabilidades) return []
+
     const countsMap: Record<string, { count: number; maxSev: string }> = {}
 
     scanResult.vulnerabilidades.forEach((v) => {
-      // Normalização amigável da categoria
       let cat = v.titulo.trim()
-      if (cat.length > 25) cat = cat.slice(0, 24) + "…"
+      if (cat.length > 22) cat = cat.slice(0, 20) + "…"
       if (!countsMap[cat]) {
         countsMap[cat] = { count: 0, maxSev: v.severidade }
       }
@@ -152,12 +148,12 @@ export function AdvancedCharts() {
     const colorPalette = [
       "#f43f5e",
       "#f59e0b",
-      "#00e5ff",
+      "#38bdf8",
       "#a855f7",
       "#10b981",
-      "#3b82f6",
-      "#fb7185",
-      "#e2e8f0",
+      "#6366f1",
+      "#ec4899",
+      "#94a3b8",
     ]
 
     return Object.entries(countsMap)
@@ -171,14 +167,15 @@ export function AdvancedCharts() {
       }))
   }, [scanResult])
 
-  // 3. Dados por Repositório (Comparativo Multi-Repo)
+  // 3. Dados por Repositório (Comparativo Multi-Repo Limpo)
   const repoComparisonData = useMemo<ItemData[]>(() => {
     if (reposList.length === 0) return []
     const totalAll = reposList.reduce((acc, r) => acc + r.total_vulnerabilidades, 0) || 1
-    const colorPalette = ["#00e5ff", "#a855f7", "#10b981", "#f59e0b", "#3b82f6", "#f43f5e"]
+    const colorPalette = ["#38bdf8", "#a855f7", "#10b981", "#f59e0b", "#6366f1", "#f43f5e"]
 
     return reposList.map((r, i) => {
-      const name = r.repositorio.split("/").slice(-2).join("/")
+      let name = r.repositorio.split("/").pop() || r.repositorio
+      name = name.replace(/\.git$/i, "")
       return {
         label: name,
         count: r.total_vulnerabilidades,
@@ -196,15 +193,21 @@ export function AdvancedCharts() {
       ? categoryData
       : repoComparisonData
 
+  const [hoveredSlice, setHoveredSlice] = useState<ItemData | null>(null)
+
+  const totalSum = useMemo(() => {
+    return currentChartData.reduce((acc, d) => acc + d.count, 0)
+  }, [currentChartData])
+
   if (!scanResult) {
     return (
-      <div className="saas-card p-5 space-y-4">
+      <div className="saas-card p-5 space-y-4 h-full flex flex-col justify-between">
         <div className="flex items-center justify-between">
           <h2 className="font-heading text-sm font-bold uppercase tracking-wider text-foreground">
             {t.dash.chartAnalytics}
           </h2>
         </div>
-        <div className="flex h-64 flex-col items-center justify-center gap-2 border border-dashed border-border bg-muted/20">
+        <div className="flex flex-1 min-h-[320px] flex-col items-center justify-center gap-2 border border-dashed border-border bg-muted/20 rounded-xl">
           <BarChart3 className="h-8 w-8 text-muted-foreground/30" />
           <div className="text-center">
             <p className="text-xs text-muted-foreground">{t.dash.waitingAuditData}</p>
@@ -223,7 +226,7 @@ export function AdvancedCharts() {
   const isMultiRepo = reposList.length > 1
 
   return (
-    <div className="saas-card p-5 space-y-4">
+    <div className="saas-card p-5 space-y-4 h-full flex flex-col justify-between">
       {/* Header Toolbar: Controles de Personalização */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
         <div>
@@ -238,57 +241,15 @@ export function AdvancedCharts() {
           </p>
         </div>
 
-        {/* Controles de Dimensão & Formato de Gráfico */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Tabs de Dimensão */}
-          <div className="flex items-center border border-border bg-muted/40 p-0.5">
-            <button
-              type="button"
-              onClick={() => setDimension("severity")}
-              className={cn(
-                "px-2.5 py-1 text-[11px] font-bold transition-all",
-                dimension === "severity"
-                  ? "bg-card text-foreground shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t.dash.dimSeverity}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDimension("category")}
-              className={cn(
-                "px-2.5 py-1 text-[11px] font-bold transition-all",
-                dimension === "category"
-                  ? "bg-card text-foreground shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t.dash.dimCategory}
-            </button>
-            {isMultiRepo && (
-              <button
-                type="button"
-                onClick={() => setDimension("repo")}
-                className={cn(
-                  "px-2.5 py-1 text-[11px] font-bold transition-all",
-                  dimension === "repo"
-                    ? "bg-card text-foreground shadow-sm border border-border"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {t.dash.dimRepo}
-              </button>
-            )}
-          </div>
-
-          {/* Seletor de Tipo de Gráfico */}
-          <div className="flex items-center border border-border bg-muted/40 p-0.5">
+        {/* Controles de Dimensão & Formato de Gráfico (Opção menor em cima da maior) */}
+        <div className="flex flex-col sm:items-end gap-1.5">
+          {/* Seletor de Tipo de Gráfico (Opção Menor - EM CIMA) */}
+          <div className="flex items-center border border-border bg-muted/40 p-0.5 rounded-lg self-start sm:self-auto">
             <button
               type="button"
               onClick={() => setChartType("bar")}
               className={cn(
-                "p-1 text-xs transition-all",
+                "p-1 text-xs transition-all rounded",
                 chartType === "bar"
                   ? "bg-card text-primary shadow-sm border border-border"
                   : "text-muted-foreground hover:text-foreground"
@@ -302,7 +263,7 @@ export function AdvancedCharts() {
               type="button"
               onClick={() => setChartType("donut")}
               className={cn(
-                "p-1 text-xs transition-all",
+                "p-1 text-xs transition-all rounded",
                 chartType === "donut"
                   ? "bg-card text-primary shadow-sm border border-border"
                   : "text-muted-foreground hover:text-foreground"
@@ -316,7 +277,7 @@ export function AdvancedCharts() {
               type="button"
               onClick={() => setChartType("area")}
               className={cn(
-                "p-1 text-xs transition-all",
+                "p-1 text-xs transition-all rounded",
                 chartType === "area"
                   ? "bg-card text-primary shadow-sm border border-border"
                   : "text-muted-foreground hover:text-foreground"
@@ -327,17 +288,83 @@ export function AdvancedCharts() {
               <AreaIcon className="h-3.5 w-3.5" />
             </button>
           </div>
+
+          {/* Tabs de Dimensão (Opção Maior - EMBAIXO) */}
+          <div className="flex items-center border border-border bg-muted/40 p-0.5 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setDimension("severity")}
+              className={cn(
+                "px-2.5 py-1 text-[11px] font-bold transition-all rounded",
+                dimension === "severity"
+                  ? "bg-card text-foreground shadow-sm border border-border"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t.dash.dimSeverity}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDimension("category")}
+              className={cn(
+                "px-2.5 py-1 text-[11px] font-bold transition-all rounded",
+                dimension === "category"
+                  ? "bg-card text-foreground shadow-sm border border-border"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t.dash.dimCategory}
+            </button>
+            {isMultiRepo && (
+              <button
+                type="button"
+                onClick={() => setDimension("repo")}
+                className={cn(
+                  "px-2.5 py-1 text-[11px] font-bold transition-all rounded",
+                  dimension === "repo"
+                    ? "bg-card text-foreground shadow-sm border border-border"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t.dash.dimRepo}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Renderização do Gráfico Selecionado */}
-      <div className="h-64 w-full pt-2">
+      <div className="relative flex-1 min-h-[360px] sm:min-h-[400px] w-full pt-2 flex items-center justify-center">
+        {/* Overlay Central no modo Donut (HUD Dinâmico no Hover) */}
+        {chartType === "donut" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 text-center px-4">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground truncate max-w-[160px]">
+              {hoveredSlice ? hoveredSlice.label : "Total"}
+            </span>
+            <span
+              className="font-heading text-3xl font-black transition-all duration-150"
+              style={{ color: hoveredSlice ? hoveredSlice.fill : "var(--foreground)" }}
+            >
+              {hoveredSlice ? hoveredSlice.count : totalSum}
+            </span>
+            <span className="text-[10px] font-mono font-bold text-primary">
+              {hoveredSlice
+                ? `${hoveredSlice.percent ?? 0}% do total`
+                : dimension === "severity"
+                ? "Vulnerabilidades"
+                : dimension === "category"
+                ? "Categorias"
+                : "Achados"}
+            </span>
+          </div>
+        )}
+
         <ResponsiveContainer width="100%" height="100%">
           {chartType === "bar" ? (
             <BarChart
               data={currentChartData}
-              margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
-              barSize={dimension === "severity" ? 44 : 32}
+              margin={{ top: 12, right: 12, left: -20, bottom: 0 }}
+              barSize={dimension === "severity" ? 48 : 36}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
               <XAxis
@@ -355,7 +382,7 @@ export function AdvancedCharts() {
                 allowDecimals={false}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255, 255, 255, 0.03)" }} />
-              <Bar dataKey="count" isAnimationActive={true} animationDuration={600}>
+              <Bar dataKey="count" radius={[6, 6, 0, 0]} isAnimationActive={true} animationDuration={600}>
                 {currentChartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
                 ))}
@@ -363,21 +390,27 @@ export function AdvancedCharts() {
             </BarChart>
           ) : chartType === "donut" ? (
             <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <Tooltip content={<CustomTooltip />} />
               <Pie
                 data={currentChartData}
                 dataKey="count"
                 nameKey="label"
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={90}
+                innerRadius={80}
+                outerRadius={130}
                 paddingAngle={4}
                 isAnimationActive={true}
                 animationDuration={600}
+                onMouseEnter={(_, idx) => setHoveredSlice(currentChartData[idx])}
+                onMouseLeave={() => setHoveredSlice(null)}
               >
                 {currentChartData.map((entry, index) => (
-                  <Cell key={`donut-${index}`} fill={entry.fill} stroke="transparent" />
+                  <Cell
+                    key={`donut-${index}`}
+                    fill={entry.fill}
+                    stroke="transparent"
+                    className="cursor-pointer transition-opacity hover:opacity-80"
+                  />
                 ))}
               </Pie>
             </PieChart>
@@ -419,26 +452,27 @@ export function AdvancedCharts() {
         </ResponsiveContainer>
       </div>
 
-      {/* Legenda & Detalhes Interativos */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/60 text-xs">
-        <div className="flex flex-wrap items-center gap-3">
+      {/* Legenda & Detalhes Interativos Formatados em Grid Moderno */}
+      <div className="pt-3 border-t border-border/60">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           {currentChartData.map((d) => (
-            <span key={d.label} className="flex items-center gap-1.5 text-muted-foreground font-mono text-[11px]">
-              <span className="h-2 w-2 shrink-0" style={{ background: d.fill }} />
-              <span className="text-foreground font-medium">{d.label}:</span>
-              <span className="font-bold text-foreground">{d.count}</span>
-              {d.percent !== undefined && (
-                <span className="text-muted-foreground/60 text-[10px]">({d.percent}%)</span>
-              )}
-            </span>
+            <div
+              key={d.label}
+              className="p-2 rounded-lg bg-muted/20 border border-border/60 flex items-center justify-between gap-2 text-xs"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.fill }} />
+                <span className="font-bold text-foreground truncate text-xs">{d.label}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 font-mono">
+                <span className="font-bold text-foreground">{d.count}</span>
+                {d.percent !== undefined && (
+                  <span className="text-muted-foreground text-[10px]">({d.percent}%)</span>
+                )}
+              </div>
+            </div>
           ))}
         </div>
-
-        <span className="text-[10px] font-mono text-muted-foreground">
-          {dimension === "repo"
-            ? t.dash.repositoriesCompared.replace("{count}", String(reposList.length))
-            : `${scanResult.total_vulnerabilidades} ${t.dash.totalFindingsWord.toLowerCase()}`}
-        </span>
       </div>
     </div>
   )

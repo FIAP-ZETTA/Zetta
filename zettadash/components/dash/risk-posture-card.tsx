@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { ShieldCheck, ShieldAlert, AlertTriangle, Activity, CheckCircle2 } from "lucide-react"
+import { ShieldCheck, ShieldAlert, AlertTriangle } from "lucide-react"
 import {
   loadConsolidatedScanResult,
   getActiveRepoUrl,
@@ -76,8 +76,8 @@ export function RiskPostureCard() {
       : 0
 
   return (
-    <div className={cn("saas-card p-5 border-l-[3px] space-y-4", borderColor)}>
-      {/* Cabeçalho Limpo e sem quebra de texto */}
+    <div className={cn("saas-card p-5 border-l-[3px] space-y-4 h-full flex flex-col justify-between", borderColor)}>
+      {/* 1. Cabeçalho */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Icon className={cn("h-4 w-4 shrink-0", iconColor)} />
@@ -85,15 +85,15 @@ export function RiskPostureCard() {
             {lang === "pt" ? "Postura de Segurança" : "Security Posture"}
           </h2>
         </div>
-        <span className={cn("px-2.5 py-0.5 font-mono text-xs font-bold border whitespace-nowrap shrink-0", gradeColor)}>
+        <span className={cn("px-2.5 py-0.5 font-mono text-xs font-bold border whitespace-nowrap shrink-0 rounded", gradeColor)}>
           {lang === "pt" ? `Grau ${grade}` : `Grade ${grade}`} · {statusText}
         </span>
       </div>
 
-      {/* Conteúdo Principal com Grade em Destaque */}
+      {/* 2. Conteúdo Principal com Grade em Destaque */}
       <div className="flex items-center justify-between gap-4 pt-1">
         <div className="flex items-center gap-3">
-          <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center font-heading text-2xl font-black border", gradeColor)}>
+          <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center font-heading text-2xl font-black border rounded-lg", gradeColor)}>
             {grade}
           </div>
           <div>
@@ -110,7 +110,7 @@ export function RiskPostureCard() {
         </div>
 
         {/* Estatísticas na Direita */}
-        <div className="text-right font-mono text-xs shrink-0 pl-2 border-l border-border">
+        <div className="text-right font-mono text-xs shrink-0 pl-3 border-l border-border">
           <p className="text-[10px] uppercase text-muted-foreground font-bold">
             {lang === "pt" ? "Taxa Crítica" : "Critical Ratio"}
           </p>
@@ -120,13 +120,13 @@ export function RiskPostureCard() {
         </div>
       </div>
 
-      {/* Barra de Progresso Visual de Saúde */}
+      {/* 3. Barra de Progresso Visual de Saúde */}
       <div className="space-y-1.5 pt-1">
         <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
           <span>{lang === "pt" ? "Índice de Proteção" : "Health Index"}</span>
           <span className="font-bold text-foreground">{score}%</span>
         </div>
-        <div className="h-1.5 w-full bg-muted overflow-hidden">
+        <div className="h-1.5 w-full bg-muted overflow-hidden rounded-full">
           <div
             className={cn(
               "h-full transition-all duration-500",
@@ -134,6 +134,27 @@ export function RiskPostureCard() {
             )}
             style={{ width: `${score}%` }}
           />
+        </div>
+      </div>
+
+      {/* 4. Diagnóstico ASPM (Sem o botão conforme solicitado) */}
+      <div className="pt-2 border-t border-border/60">
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="bg-muted/30 p-2.5 rounded-lg border border-border">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground block">Impacto de Risco</span>
+            <span className="font-mono font-bold text-foreground text-xs mt-0.5 block">
+              {scanResult.criticas > 0 ? "Exposição Crítica" : "Controlado"}
+            </span>
+          </div>
+          <div className="bg-muted/30 p-2.5 rounded-lg border border-border">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground block">Quality Gate</span>
+            <span className={cn(
+              "font-mono font-bold text-xs mt-0.5 block",
+              scanResult.criticas > 0 ? "text-rose-500" : "text-emerald-500"
+            )}>
+              {scanResult.criticas > 0 ? "Bloqueado" : "Aprovado"}
+            </span>
+          </div>
         </div>
       </div>
     </div>

@@ -3,9 +3,10 @@ api.py
 ------
 A API do ZettaScan — é o que o ZettaDash e o backend principal vão chamar.
 
-Expõe dois endpoints:
-  POST /scan   → recebe a URL do repo e o token, retorna o relatório
-  GET  /health → health check
+Expõe endpoints:
+  POST /scan    → recebe a URL do repo e o token, retorna o relatório
+  POST /export  → recebe dados de scan e retorna JSON completo ou SBOM CycloneDX
+  GET  /health  → health check
 
 Para rodar a API:
     uvicorn api:app --reload --port 8001
@@ -22,6 +23,11 @@ Correções de auditoria 2026-07-14:
 - [AP-3] Validação de URL via regex + field_validator Pydantic (não apenas startswith)
 - [AP-4] response_model=ScanResponse adicionado — FastAPI valida o retorno
 
+Adições 2026-08-17:
+- [AP-5] Campo `tipo` em VulnerabilidadeResponse (codigo / dependencia / iac)
+- [AP-6] Campos `iac_total` e `iac_findings` em ScanResponse
+- [AP-7] Endpoint POST /export para download de relatório JSON e SBOM CycloneDX
+
 Pendências de produto documentadas:
 - [P-1] allow_origins: configurar com o domínio real do ZettaDash em produção
 - [P-2] Rate limiting: implementar ou documentar ausência (ver comentário abaixo)
@@ -29,6 +35,8 @@ Pendências de produto documentadas:
 
 import logging
 import re
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 # pyrefly: ignore [missing-import]
@@ -41,6 +49,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from scanner import executar_scan
+from dast_scanner import analisar_dast
+from attack_path import gerar_attack_paths
+from quality_gate import avaliar_quality_gate, gerar_github_action_workflow
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -52,8 +63,8 @@ logger = logging.getLogger(__name__)
 # ── Aplicação FastAPI ─────────────────────────────────────────────────────────
 app = FastAPI(
     title="ZettaScan API",
-    description="Motor de análise de segurança do Zetta Guard",
-    version="1.0.0",
+    description="Motor de análise de segurança do Zetta Guard — ASPM completo com SAST, SCA e IaC",
+    version="2.0.0",
 )
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
@@ -133,7 +144,22 @@ class VulnerabilidadeResponse(BaseModel):
     severidade: str = Field(default="LOW", pattern=r"^(CRITICAL|HIGH|MEDIUM|LOW)$")
     arquivo: str = ""
     linha: Any = 0
+    # [AP-5] tipo identifica a CAMADA ASPM de origem do achado:
+    #   "codigo"      → SAST (Semgrep / motor nativo)
+    #   "dependencia" → SCA (OSV.dev / CVEs em bibliotecas)
+    #   "iac"         → IaC (Dockerfile, docker-compose, CI/CD, Terraform)
     tipo: str = "codigo"
+
+
+class IacFindingResponse(BaseModel):
+    """Achado bruto do IaC Scanner (antes da priorização IA)."""
+    arquivo: str = ""
+    linha: Any = 0
+    regra: str = ""
+    mensagem: str = ""
+    severidade: str = "MEDIUM"
+    tipo: str = "iac"
+    nome: str = ""
 
 
 class ScanResponse(BaseModel):
@@ -147,6 +173,12 @@ class ScanResponse(BaseModel):
     medias: int
     baixas: int
     vulnerabilidades: List[VulnerabilidadeResponse]
+    # [AP-6] Campos IaC
+    iac_total: int = 0
+    iac_findings: List[IacFindingResponse] = []
+    # [AP-8] Campos de Attack Path Analysis e CI/CD Quality Gate
+    attack_paths: Optional[List[Dict[str, Any]]] = None
+    quality_gate: Optional[Dict[str, Any]] = None
 
 
 class ErrorResponse(BaseModel):
@@ -155,6 +187,43 @@ class ErrorResponse(BaseModel):
     codigo: int
     mensagem: str
     detalhe: Optional[str] = None
+
+
+# ── Schemas DAST & ASPM Avançado ─────────────────────────────────────────────
+
+class DastRequest(BaseModel):
+    """Corpo esperado no POST /scan-dast."""
+    target_url: str = Field(..., description="URL da aplicação em execução (ex: https://app.example.com)")
+    timeout_seconds: Optional[float] = Field(default=6.0, description="Tempo limite em segundos")
+
+
+class AttackPathsRequest(BaseModel):
+    """Corpo esperado no POST /attack-paths."""
+    vulnerabilidades: List[Dict[str, Any]] = Field(default_factory=list)
+    iac_findings: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+
+
+class QualityGateRequest(BaseModel):
+    """Corpo esperado no POST /quality-gate/evaluate."""
+    vulnerabilidades: List[Dict[str, Any]] = Field(default_factory=list)
+    iac_findings: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    policy: Optional[Dict[str, Any]] = None
+    repo_name: Optional[str] = "app"
+
+
+# ── Schema para /export ───────────────────────────────────────────────────────
+
+class ExportRequest(BaseModel):
+    """Corpo esperado no POST /export."""
+    repositorio: str = Field(..., description="URL do repositório auditado")
+    vulnerabilidades: List[Dict[str, Any]] = Field(default_factory=list)
+    iac_findings: List[Dict[str, Any]] = Field(default_factory=list)
+    criticas: int = 0
+    altas: int = 0
+    medias: int = 0
+    baixas: int = 0
+    iac_total: int = 0
+    formato: str = Field(default="json", pattern=r"^(json|sbom)$")
 
 
 # ── Handler global de erros ───────────────────────────────────────────────────
@@ -196,7 +265,8 @@ async def iniciar_scan(request: ScanRequest):
         token: token de acesso read-only gerado pelo cliente
 
     Retorna:
-        Relatório completo com vulnerabilidades priorizadas pelo Gemini.
+        Relatório completo com vulnerabilidades priorizadas pelo Gemini,
+        incluindo achados SAST (código), SCA (dependências) e IaC (infraestrutura).
 
     Tempo estimado: 1–5 minutos dependendo do tamanho do repositório.
     """
@@ -228,7 +298,158 @@ async def iniciar_scan(request: ScanRequest):
     return resultado
 
 
+@app.post(
+    "/export",
+    responses={
+        200: {"description": "Relatório exportado em JSON ou SBOM CycloneDX"},
+        400: {"model": ErrorResponse, "description": "Formato inválido"},
+    },
+)
+async def exportar_relatorio(request: ExportRequest):
+    """
+    [AP-7] Endpoint de exportação de relatório de segurança.
+
+    Suporta dois formatos:
+      - `json`: Relatório completo estruturado com todos os achados
+      - `sbom`: Software Bill of Materials no padrão CycloneDX 1.4
+
+    O SBOM lista todos os componentes identificados nas dependências
+    com seus CVEs conhecidos — padrão exigido por compliance (EU CRA, NIST SSDF).
+    """
+    agora = datetime.now(timezone.utc).isoformat()
+
+    if request.formato == "sbom":
+        # Gera SBOM no padrão CycloneDX 1.4
+        componentes = []
+        vistos = set()
+
+        for vuln in request.vulnerabilidades:
+            # Achados de dependências têm campo 'pacote' ou 'arquivo' com nome do pacote
+            pacote = vuln.get("pacote", "")
+            versao = vuln.get("versao", "")
+            cve = vuln.get("cve_id", "")
+
+            if not pacote and vuln.get("tipo") == "dependencia":
+                # Tenta extrair do arquivo
+                pacote = vuln.get("arquivo", "unknown").split("/")[0]
+
+            if pacote and pacote not in vistos:
+                vistos.add(pacote)
+                comp = {
+                    "type": "library",
+                    "name": pacote,
+                    "version": versao or "unknown",
+                    "purl": f"pkg:generic/{pacote}@{versao}" if versao else f"pkg:generic/{pacote}",
+                }
+                if cve:
+                    comp["vulnerabilities"] = [{"id": cve, "source": {"name": "OSV", "url": "https://osv.dev"}}]
+                componentes.append(comp)
+
+        sbom = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.4",
+            "serialNumber": f"urn:uuid:{uuid.uuid4()}",
+            "version": 1,
+            "metadata": {
+                "timestamp": agora,
+                "tools": [{"vendor": "Zetta", "name": "ZettaScan", "version": "2.0.0"}],
+                "component": {
+                    "type": "application",
+                    "name": request.repositorio.split("/")[-1] if "/" in request.repositorio else request.repositorio,
+                    "version": "latest",
+                    "purl": f"pkg:github/{request.repositorio.replace('https://github.com/', '')}",
+                },
+            },
+            "components": componentes,
+            "vulnerabilities": [
+                {
+                    "id": v.get("cve_id", f"ZETTA-{i:04d}"),
+                    "source": {"name": "OSV/ZettaScan"},
+                    "ratings": [{"score": {"base": 7.5}, "severity": v.get("severidade", "MEDIUM")}],
+                    "description": v.get("titulo", ""),
+                    "affects": [{"ref": v.get("pacote", "")}],
+                }
+                for i, v in enumerate(request.vulnerabilidades)
+                if v.get("tipo") == "dependencia"
+            ],
+        }
+        return JSONResponse(content=sbom, media_type="application/json")
+
+    else:
+        # Formato JSON completo
+        relatorio = {
+            "zettascan_report": {
+                "version": "2.0.0",
+                "generated_at": agora,
+                "repositorio": request.repositorio,
+                "summary": {
+                    "total": len(request.vulnerabilidades),
+                    "criticas": request.criticas,
+                    "altas": request.altas,
+                    "medias": request.medias,
+                    "baixas": request.baixas,
+                    "iac_total": request.iac_total,
+                },
+                "layers": {
+                    "sast": [v for v in request.vulnerabilidades if v.get("tipo") == "codigo"],
+                    "sca": [v for v in request.vulnerabilidades if v.get("tipo") == "dependencia"],
+                    "iac": request.iac_findings,
+                },
+                "all_findings": request.vulnerabilidades,
+            }
+        }
+@app.post(
+    "/scan-dast",
+    responses={
+        200: {"description": "Resultado da varredura dinâmica de segurança DAST"},
+        400: {"model": ErrorResponse, "description": "URL ou parâmetros inválidos"},
+    },
+)
+async def executar_dast(request: DastRequest):
+    """
+    [DAST-1] Executa varredura dinâmica de segurança (DAST) em uma URL ativa.
+    Analisa Headers de Segurança, CORS, vazamento de versões e endpoints sensíveis.
+    """
+    logger.info("Iniciando varredura DAST para URL: %s", request.target_url)
+    resultado = await analisar_dast(request.target_url, request.timeout_seconds or 6.0)
+    return JSONResponse(content=resultado)
+
+
+@app.post(
+    "/attack-paths",
+    responses={
+        200: {"description": "Cadeias de ataque (Kill Chains) correlacionadas"},
+    },
+)
+async def correlacionar_attack_paths(request: AttackPathsRequest):
+    """
+    [APA-1] Motor de correlação e análise de caminhos de ataque (Attack Path Analysis).
+    """
+    paths = gerar_attack_paths(request.vulnerabilidades, request.iac_findings)
+    return JSONResponse(content={"attack_paths": paths, "total": len(paths)})
+
+
+@app.post(
+    "/quality-gate/evaluate",
+    responses={
+        200: {"description": "Resultado da avaliação do Quality Gate CI/CD"},
+    },
+)
+async def avaliar_qg(request: QualityGateRequest):
+    """
+    [QG-1] Avalia se o repositório cumpre as políticas corporativas de Quality Gate
+    e gera o workflow de CI/CD para GitHub Actions.
+    """
+    base_data = {
+        "vulnerabilidades": request.vulnerabilidades,
+        "iac_findings": request.iac_findings or [],
+    }
+    resultado = avaliar_quality_gate(base_data, request.policy)
+    resultado["github_action_workflow"] = gerar_github_action_workflow(request.repo_name or "app")
+    return JSONResponse(content=resultado)
+
+
 @app.get("/health")
 async def health():
     """Health check — retorna 200 se a API está no ar."""
-    return {"status": "ok", "servico": "ZettaScan"}
+    return {"status": "ok", "servico": "ZettaScan", "version": "2.0.0"}

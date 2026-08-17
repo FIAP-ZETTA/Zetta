@@ -1,0 +1,143 @@
+name: "Zetta Guard — ASPM Security Quality Gate"
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+jobs:
+  aspm-security-scan:
+    name: "Zetta ASPM Code-to-Cloud Audit"
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+
+    steps:
+      - name: "Checkout do Repositório"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Configurar Python 3.12"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: "Instalar Dependências do ZettaScan"
+        run: |
+          python -m pip install --upgrade pip
+          pip install semgrep httpx pydantic google-generativeai pyyaml
+
+      - name: "Executar Zetta ASPM (SAST + Secrets + SCA + IaC)"
+        id: zetta_scan
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          mkdir -p .zetta_output
+          echo "🔍 Iniciando Auditoria Completa do Zetta Guard..."
+          
+          python -c "
+          import sys, os, json
+          sys.path.insert(0, os.path.abspath('zettascan'))
+          try:
+              from scanner import executar_scan
+              resultado = executar_scan('.')
+              with open('.zetta_output/report.json', 'w', encoding='utf-8') as f:
+                  json.dump(resultado, f, indent=2, ensure_ascii=False)
+              print('✅ Scan Zetta ASPM concluído com sucesso!')
+          except Exception as e:
+              print(f'❌ Erro ao executar scan: {e}')
+              sys.exit(1)
+          "
+
+      - name: "Avaliar Política de CI/CD Quality Gate"
+        id: quality_gate
+        run: |
+          python -c "
+          import sys, os, json
+          sys.path.insert(0, os.path.abspath('zettascan'))
+          from quality_gate import avaliar_quality_gate
+          
+          with open('.zetta_output/report.json', 'r', encoding='utf-8') as f:
+              scan = json.load(f)
+          
+          qg = avaliar_quality_gate(
+              scan_result=scan,
+              policy={'max_critical': 0, 'max_high': 2, 'block_on_secrets': True}
+          )
+          
+          with open('.zetta_output/quality_gate.json', 'w', encoding='utf-8') as f:
+              json.dump(qg, f, indent=2, ensure_ascii=False)
+          
+          # Escrever no GitHub Step Summary
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+              status_badge = '🟢 APROVADO' if qg['passed'] else '🔴 BLOQUEADO'
+              f.write(f'# 🛡️ Zetta Guard ASPM — Quality Gate {status_badge}\n\n')
+              f.write(f'**Repositório:** \`{os.getenv(\"GITHUB_REPOSITORY\")}\` | **Commit:** \`{os.getenv(\"GITHUB_SHA\", \"\")[:7]}\`\n\n')
+              f.write(f'- **Total de Falhas:** {qg.get(\"total_vulnerabilidades\", 0)}\n')
+              f.write(f'- **Críticas:** {qg.get(\"criticas\", 0)} (Limite: 0)\n')
+              f.write(f'- **Altas:** {qg.get(\"altas\", 0)} (Limite: 2)\n')
+              f.write(f'- **Segredos/API Keys:** {qg.get(\"segredos_count\", 0)} (Limite: 0)\n\n')
+              
+              if qg.get('violations'):
+                  f.write('### ⚠️ Violações da Política de Segurança:\n')
+                  for v in qg['violations']:
+                      f.write(f'- ❌ **{v.get(\"rule\", \"violation\")}**: {v.get(\"message\", \"\")}\n')
+              else:
+                  f.write('✅ Todas as regras de segurança corporativa foram cumpridas.\n')
+          
+          if not qg['passed']:
+              print('🚨 Quality Gate FALHOU! Bloqueando pipeline.')
+              sys.exit(1)
+          else:
+              print('🎉 Quality Gate APROVADO!')
+          "
+
+      - name: "Comentar no Pull Request (Zetta Bot)"
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('.zetta_output/quality_gate.json')) return;
+            const qg = JSON.parse(fs.readFileSync('.zetta_output/quality_gate.json', 'utf8'));
+            
+            const isPassed = qg.passed;
+            const title = isPassed 
+              ? '### 🟢 Zetta Guard ASPM — Quality Gate Aprovado' 
+              : '### 🔴 Zetta Guard ASPM — Pull Request Bloqueado';
+            
+            let body = `${title}\n\n`;
+            body += `| Métrica | Encontradas | Política Corporativa | Status |\n`;
+            body += `| :--- | :--- | :--- | :--- |\n`;
+            body += `| 🚨 Críticas | **${qg.criticas}** | Máximo 0 | ${qg.criticas === 0 ? '✅ Aprovado' : '❌ Violado'} |\n`;
+            body += `| ⚠️ Altas | **${qg.altas}** | Máximo 2 | ${qg.altas <= 2 ? '✅ Aprovado' : '❌ Violado'} |\n`;
+            body += `| 🔑 Segredos/Tokens | **${qg.segredos_hardcoded}** | Zero Tolerância | ${qg.segredos_hardcoded === 0 ? '✅ Aprovado' : '❌ Violado'} |\n\n`;
+            
+            if (!isPassed) {
+              body += `> 🛑 **Atenção:** Este Pull Request introduz riscos de segurança que violam as políticas corporativas. Corrija as vulnerabilidades críticas antes de realizar o merge.\n`;
+            } else {
+              body += `> ✨ **Parabéns:** Nenhuma vulnerabilidade crítica ou segredo foi detectado neste PR.\n`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: "Salvar Relatório de Auditoria ASPM (Artifact)"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zetta-aspm-report
+          path: .zetta_output/
+          retention-days: 14

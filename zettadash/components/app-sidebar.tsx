@@ -20,10 +20,10 @@ export function AppSidebar() {
   ]
 
   return (
-    <aside className="hidden md:flex w-72 shrink-0 flex-col border-r border-border bg-sidebar sticky top-0 h-screen overflow-y-auto">
+    <aside className="hidden md:flex w-80 shrink-0 flex-col border-r border-border bg-sidebar sticky top-0 h-screen overflow-y-auto">
       {/* Nav */}
-      <nav className="flex-1 space-y-1.5 p-4 pt-6">
-        <p className="px-3 pb-3 text-xs font-extrabold uppercase tracking-wider">
+      <nav className="flex-1 space-y-2 p-5 pt-7">
+        <p className="px-3.5 pb-3 text-xs font-extrabold uppercase tracking-wider">
           <span className="text-foreground">{t.nav.modules}</span>{" "}
           <span className="text-primary">{t.nav.brand}</span>
         </p>
@@ -35,7 +35,7 @@ export function AppSidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "group relative flex items-center gap-3.5 px-3.5 py-3 text-sm transition-all border",
+                "group relative flex items-center gap-4 px-4 py-3.5 text-base transition-all border rounded-xl",
                 active
                   ? "bg-white/[0.08] dark:bg-white/[0.08] light:bg-black/[0.05] text-foreground border-border font-bold shadow-sm"
                   : "border-transparent text-muted-foreground hover:bg-white/[0.04] dark:hover:bg-white/[0.04] light:hover:bg-black/[0.03] hover:text-foreground",
@@ -44,21 +44,21 @@ export function AppSidebar() {
               {/* Marcador lateral ativo */}
               {active && (
                 <span
-                  className="absolute left-0 top-0 bottom-0 w-1 bg-primary shadow-[0_0_12px_var(--primary-glow)]"
+                  className="absolute left-0 top-2 bottom-2 w-1.5 rounded-r-full bg-primary shadow-[0_0_12px_var(--primary-glow)]"
                 />
               )}
 
               <div className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center transition-all",
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all",
                 active
                   ? "bg-primary text-primary-foreground font-bold shadow-[0_0_15px_var(--primary-glow)]"
-                  : "bg-muted text-muted-foreground group-hover:text-foreground"
+                  : "bg-muted/70 text-muted-foreground group-hover:text-foreground border border-border/50"
               )}>
-                <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <Icon className="h-5.5 w-5.5 shrink-0" aria-hidden="true" />
               </div>
 
               <div className="flex flex-col min-w-0">
-                <span className={cn("leading-tight text-sm text-foreground", active ? "font-bold" : "font-semibold")}>
+                <span className={cn("leading-tight text-[15px] text-foreground", active ? "font-bold" : "font-semibold")}>
                   {item.label}
                 </span>
                 <span className="text-xs text-muted-foreground mt-0.5 truncate">{item.desc}</span>

@@ -2,8 +2,15 @@
 
 import { useEffect, useState, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { Search, ScanLine, Clock, GitBranch, RefreshCw, ShieldOff, ArrowRight, ShieldAlert, AlertTriangle, Zap, CheckCircle2, Layers } from "lucide-react"
+import {
+  Search, ScanLine, Clock, GitBranch, ShieldOff, ArrowRight,
+  ShieldAlert, AlertTriangle, Zap, CheckCircle2, Layers,
+  Download, FileJson, FileText, Code2, Package, Server, ChevronDown,
+  Flame, Globe, Sparkles, Filter, RefreshCw
+} from "lucide-react"
 import { VulnerabilityCard, type Vulnerability } from "@/components/scan/vulnerability-card"
+import { AttackPathViewer } from "@/components/scan/attack-path-viewer"
+import { DastScannerModal } from "@/components/scan/dast-scanner-modal"
 import { RepoSelector } from "@/components/repo-selector"
 import { useLanguage } from "@/lib/language-provider"
 import { cn } from "@/lib/utils"
@@ -11,9 +18,15 @@ import {
   loadConsolidatedScanResult,
   getActiveRepoUrl,
   getSavedRepositories,
+  exportScanReport,
+  fetchAttackPaths,
   type ScanResponse,
+  type ExportFormat,
+  type AttackPath,
 } from "@/lib/zettascan-api"
 import Link from "next/link"
+
+type OriginFilter = "ALL" | "codigo" | "dependencia" | "iac" | "dast"
 
 function ZettaScanInner() {
   const { t } = useLanguage()
@@ -23,8 +36,16 @@ function ZettaScanInner() {
   const [vulns, setVulns] = useState<Vulnerability[]>([])
   const [scanMeta, setScanMeta] = useState<ScanResponse | null>(null)
   const [filter, setFilter] = useState<string>("ALL")
+  const [originFilter, setOriginFilter] = useState<OriginFilter>("ALL")
   const [search, setSearch] = useState(queryParam)
   const [repoCount, setRepoCount] = useState(0)
+  const [exporting, setExporting] = useState(false)
+  const [exportDone, setExportDone] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showAttackPaths, setShowAttackPaths] = useState(false)
+  const [showDastModal, setShowDastModal] = useState(false)
+  const [attackPathsList, setAttackPathsList] = useState<AttackPath[]>([])
+  const [loadingPaths, setLoadingPaths] = useState(false)
 
   const severityMap: Record<string, Vulnerability["severity"]> = {
     CRITICAL: "CRITICAL",
@@ -45,6 +66,7 @@ function ZettaScanInner() {
       impacto: v.impacto,
       correcao: v.correcao,
       repo: v.repositorio,
+      origem: v.tipo || "codigo",
     }
   }
 
@@ -57,22 +79,69 @@ function ZettaScanInner() {
     if (result) {
       setVulns(result.vulnerabilidades.map(apiToVuln))
       setScanMeta(result)
+      if (result.attack_paths) {
+        setAttackPathsList(result.attack_paths)
+      }
     } else {
       setVulns([])
       setScanMeta(null)
+      setAttackPathsList([])
     }
   }, [])
 
-  useEffect(() => {
-    if (queryParam) setSearch(queryParam)
-  }, [queryParam])
+  const handleOpenAttackPaths = async () => {
+    if (!scanMeta) return
+    if (scanMeta.attack_paths && scanMeta.attack_paths.length > 0) {
+      setAttackPathsList(scanMeta.attack_paths)
+      setShowAttackPaths(true)
+      return
+    }
+    setLoadingPaths(true)
+    try {
+      const paths = await fetchAttackPaths(scanMeta.vulnerabilidades, scanMeta.iac_findings)
+      setAttackPathsList(paths)
+      setShowAttackPaths(true)
+    } finally {
+      setLoadingPaths(false)
+    }
+  }
+
+  const handleAddDastFindings = (findings: any[]) => {
+    const dastVulns = findings.map((f, i) => ({
+      id: `dast-${Date.now()}-${i}`,
+      file: f.arquivo,
+      line: f.linha,
+      type: f.titulo,
+      severity: f.severidade,
+      description: f.explicacao,
+      explicacao: f.explicacao,
+      impacto: f.impacto,
+      correcao: f.correcao,
+      repo: scanMeta?.repositorio || "Runtime DAST",
+      origem: "dast",
+    }))
+    setVulns(prev => [...prev, ...dastVulns])
+    setOriginFilter("dast")
+  }
 
   useEffect(() => {
     refresh()
-    const handler = () => refresh()
+    const handler = () => {
+      setSearch("")
+      setFilter("ALL")
+      setOriginFilter("ALL")
+      refresh()
+    }
     window.addEventListener("zettascan:repo_change", handler)
     return () => window.removeEventListener("zettascan:repo_change", handler)
   }, [refresh])
+
+  useEffect(() => {
+    if (!showExportMenu) return
+    const handler = () => setShowExportMenu(false)
+    document.addEventListener("click", handler)
+    return () => document.removeEventListener("click", handler)
+  }, [showExportMenu])
 
   const counts = {
     CRITICAL: vulns.filter(v => v.severity === "CRITICAL").length,
@@ -81,21 +150,44 @@ function ZettaScanInner() {
     LOW:      vulns.filter(v => v.severity === "LOW").length,
   }
 
+  const originCounts = {
+    codigo:     vulns.filter(v => v.origem === "codigo").length,
+    dependencia:vulns.filter(v => v.origem === "dependencia").length,
+    iac:        vulns.filter(v => v.origem === "iac").length,
+    dast:       vulns.filter(v => v.origem === "dast").length,
+  }
+
   const filtered = vulns.filter(v => {
     const matchSev    = filter === "ALL" || v.severity === filter
+    const matchOrigin = originFilter === "ALL" || v.origem === originFilter
     const matchSearch = search === "" ||
       v.file.toLowerCase().includes(search.toLowerCase()) ||
       v.type.toLowerCase().includes(search.toLowerCase()) ||
       (v.repo ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (v.description ?? "").toLowerCase().includes(search.toLowerCase())
-    return matchSev && matchSearch
+    return matchSev && matchOrigin && matchSearch
   })
+
+  async function handleExport(formato: ExportFormat) {
+    if (!scanMeta || exporting) return
+    setShowExportMenu(false)
+    setExporting(true)
+    try {
+      await exportScanReport(scanMeta, formato)
+      setExportDone(true)
+      setTimeout(() => setExportDone(false), 3000)
+    } catch {
+      // ignore
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // ── Estado vazio (sem scan realizado) ──────────────────────────────────────
   if (!scanMeta) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center space-y-6 max-w-md mx-auto">
-        <div className="flex h-16 w-16 items-center justify-center bg-card border border-border shadow-sm">
+        <div className="flex h-16 w-16 items-center justify-center bg-card border border-border shadow-sm rounded-2xl">
           <ShieldOff className="h-8 w-8 text-primary/60" />
         </div>
         <div className="space-y-2">
@@ -104,12 +196,29 @@ function ZettaScanInner() {
             {t.scan.noRepoSub}
           </p>
         </div>
-        <Link
-          href="/configuracoes"
-          className="btn-electric px-5 py-2.5 text-xs font-bold uppercase tracking-wider"
-        >
-          {t.dash.connectRepo} <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/configuracoes"
+            className="btn-electric px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2"
+          >
+            {t.dash.connectRepo} <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+          <button
+            id="btn-empty-dast"
+            onClick={() => setShowDastModal(true)}
+            className="border border-border bg-card hover:border-primary/50 text-foreground px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-2 rounded-lg"
+          >
+            <Globe className="h-4 w-4 text-primary" />
+            {t.dast.buttonOpen}
+          </button>
+        </div>
+
+        {/* Modal de Scanner DAST */}
+        <DastScannerModal
+          isOpen={showDastModal}
+          onClose={() => setShowDastModal(false)}
+          onAddFindingsToReport={handleAddDastFindings}
+        />
       </div>
     )
   }
@@ -117,159 +226,255 @@ function ZettaScanInner() {
   const activeUrl = getActiveRepoUrl()
   const isConsolidated = !activeUrl && repoCount > 1
 
-  const filterTabs = [
-    { id: "ALL",      label: t.scan.allTabs, count: vulns.length },
-    { id: "CRITICAL", label: t.scan.critical, count: counts.CRITICAL },
-    { id: "HIGH",     label: t.scan.high,     count: counts.HIGH },
-    { id: "MEDIUM",   label: t.scan.medium,   count: counts.MEDIUM },
-    { id: "LOW",      label: t.scan.low,      count: counts.LOW },
-  ]
-
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Selector Multi-Repositório & Ações */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border p-3.5 shadow-sm">
-        <RepoSelector />
-        <div className="flex items-center gap-2">
-          <Link
-            href="/zettadash"
-            className="border border-border hover:border-primary/50 bg-card px-3 py-1.5 text-xs font-bold text-foreground shrink-0 transition-colors"
-          >
-            {t.scan.viewDashboard}
-          </Link>
-          <Link
-            href="/configuracoes"
-            className="btn-electric px-3 py-1.5 text-xs font-bold shrink-0"
-          >
-            {t.scan.manageConnections} <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-      </div>
-
-      {/* Header com metadata do Scan */}
-      <div className="saas-card p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5 min-w-0">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center bg-primary/10 border border-primary/30 text-primary mt-0.5">
-              {isConsolidated ? <Layers className="h-5 w-5" /> : <ScanLine className="h-5 w-5" />}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-heading text-base font-bold text-foreground tracking-tight truncate">
-                  {isConsolidated ? t.scan.consolidatedTitle.replace("{count}", String(repoCount)) : scanMeta.repositorio}
-                </span>
-                <span className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 font-mono text-[10px] font-bold px-2 py-0.5">
-                  {t.scan.sastAudited}
-                </span>
-              </div>
-              <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground font-mono flex-wrap">
-                {scanMeta.scanned_at && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {new Date(scanMeta.scanned_at).toLocaleString()}
-                  </span>
-                )}
-                {scanMeta.tempo_segundos > 0 && (
-                  <span>{t.scan.duration.replace("{sec}", String(scanMeta.tempo_segundos))}</span>
-                )}
-                <span>{t.scan.engine}</span>
-              </div>
-            </div>
+    <div className="space-y-5 max-w-6xl mx-auto">
+      {/* ── BARRA SUPERIOR CONSOLIDADA E LIMPA ─────────────────────────────── */}
+      <div className="saas-card p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Repo Selector & Status */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <RepoSelector />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {scanMeta.tempo_segundos}s
+            </span>
+            <span>•</span>
+            <span className="text-foreground font-bold">
+              {vulns.length} achados
+            </span>
           </div>
         </div>
-      </div>
 
-      {/* Cards de Contagem por Severidade */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        {[
-          { id: "CRITICAL", label: t.scan.critical, count: counts.CRITICAL, icon: ShieldAlert, color: "text-rose-500", border: "hover:border-rose-500/50" },
-          { id: "HIGH",     label: t.scan.high,     count: counts.HIGH,     icon: AlertTriangle, color: "text-amber-500", border: "hover:border-amber-500/50" },
-          { id: "MEDIUM",   label: t.scan.medium,   count: counts.MEDIUM,   icon: Zap,           color: "text-indigo-500", border: "hover:border-indigo-500/50" },
-          { id: "LOW",      label: t.scan.low,      count: counts.LOW,      icon: Zap,           color: "text-primary",    border: "hover:border-primary/50" },
-        ].map((s) => {
-          const Icon = s.icon
-          const isSelected = filter === s.id
-          return (
+        {/* Botões de Ação ASPM Agrupados e Elegantes */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Attack Paths */}
+          <button
+            id="btn-attack-paths"
+            onClick={handleOpenAttackPaths}
+            disabled={loadingPaths}
+            className="px-3 py-1.5 rounded-lg border border-border bg-card hover:border-primary/60 text-foreground text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
+            title="Visualizar Grafo de Ataque Correlacionado"
+          >
+            <Flame className="h-3.5 w-3.5 text-rose-500" />
+            <span>Attack Paths</span>
+            {attackPathsList.length > 0 && (
+              <span className="text-[10px] font-mono font-bold bg-muted px-1.5 py-0.2 rounded border border-border">
+                {attackPathsList.length}
+              </span>
+            )}
+          </button>
+
+          {/* DAST Scanner */}
+          <button
+            id="btn-dast-scanner"
+            onClick={() => setShowDastModal(true)}
+            className="px-3 py-1.5 rounded-lg border border-border bg-card hover:border-primary/60 text-foreground text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
+            title="Executar Teste Dinâmico em URL"
+          >
+            <Globe className="h-3.5 w-3.5 text-primary" />
+            <span>DAST</span>
+          </button>
+
+          {/* Exportar Menu */}
+          <div className="relative">
             <button
-              key={s.id}
+              id="export-report-btn"
               type="button"
-              onClick={() => setFilter(filter === s.id ? "ALL" : s.id)}
-              className={cn(
-                "saas-card p-4 text-left transition-all",
-                s.border,
-                isSelected && "border-primary bg-primary/5 shadow-sm"
-              )}
+              onClick={(e) => { e.stopPropagation(); setShowExportMenu(s => !s) }}
+              disabled={exporting}
+              className="px-3 py-1.5 rounded-lg border border-border bg-card hover:border-primary/60 text-foreground text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  {s.label}
-                </span>
-                <Icon className={cn("h-4 w-4", s.color)} />
-              </div>
-              <p className={cn("font-heading text-3xl font-extrabold mt-1 tracking-tight", s.color)}>
-                {s.count}
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {s.count === 1 ? t.scan.findingWordSingle : t.scan.findingsWord}
-              </p>
+              {exportDone ? (
+                <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Baixado</>
+              ) : (
+                <><Download className="h-3.5 w-3.5 text-muted-foreground" /> Exportar <ChevronDown className="h-3 w-3 opacity-60" /></>
+              )}
             </button>
-          )
-        })}
+
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1.5 z-50 bg-card border border-border shadow-xl rounded-xl min-w-[200px] py-1 animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  type="button"
+                  id="export-json-btn"
+                  onClick={() => handleExport("json")}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left hover:bg-muted transition-colors"
+                >
+                  <FileJson className="h-4 w-4 text-primary" />
+                  <div>
+                    <p className="font-bold text-foreground">Relatório JSON</p>
+                    <p className="text-[10px] text-muted-foreground">ASPM Completo</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  id="export-sbom-btn"
+                  onClick={() => handleExport("sbom")}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left hover:bg-muted transition-colors border-t border-border/40"
+                >
+                  <FileText className="h-4 w-4 text-violet-400" />
+                  <div>
+                    <p className="font-bold text-foreground">SBOM CycloneDX</p>
+                    <p className="text-[10px] text-muted-foreground">Padrão 1.4 Compliance</p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Atalho Configurações */}
+          <Link
+            href="/configuracoes"
+            className="btn-electric px-3 py-1.5 text-xs font-bold rounded-lg shrink-0 flex items-center gap-1.5"
+          >
+            <span>Novo Repo</span> <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
       </div>
 
-      {/* Toolbar de Filtro e Busca */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border p-3 shadow-sm">
-        {/* Tabs de severidade */}
+      {/* ── BARRA UNIFICADA DE FILTROS & BUSCA (SEM POLUIÇÃO VISUAL) ─────────── */}
+      <div className="saas-card p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        {/* Tabs de Origem (SAST / SCA / IaC / DAST) */}
         <div className="flex items-center gap-1 overflow-x-auto">
-          {filterTabs.map((tab) => {
-            const active = filter === tab.id
+          {[
+            { id: "ALL" as OriginFilter, label: "Todos", count: vulns.length },
+            { id: "codigo" as OriginFilter, label: "SAST", count: originCounts.codigo },
+            { id: "dependencia" as OriginFilter, label: "SCA", count: originCounts.dependencia },
+            { id: "iac" as OriginFilter, label: "IaC", count: originCounts.iac },
+            ...(originCounts.dast > 0 ? [{ id: "dast" as OriginFilter, label: "DAST", count: originCounts.dast }] : []),
+          ].map((tab) => {
+            const active = originFilter === tab.id
             return (
               <button
                 key={tab.id}
-                onClick={() => setFilter(tab.id)}
+                onClick={() => setOriginFilter(tab.id)}
                 className={cn(
-                  "px-3 py-1 text-xs font-bold transition-all whitespace-nowrap",
+                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap",
                   active
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                 )}
               >
-                {tab.label} ({tab.count})
+                <span>{tab.label}</span>
+                <span className={cn(
+                  "text-[10px] font-mono px-1.5 py-0.2 rounded",
+                  active ? "bg-white/20" : "bg-muted text-muted-foreground"
+                )}>
+                  {tab.count}
+                </span>
               </button>
             )
           })}
         </div>
 
-        {/* Busca por arquivo, tipo ou repositório */}
-        <div className="flex items-center gap-2 border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/50 focus-within:border-primary">
-          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <input
-            placeholder={t.scan.searchPlaceholder}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-48 sm:w-56 bg-transparent text-foreground placeholder:text-muted-foreground/50 focus:outline-none text-xs"
-          />
+        {/* Filtros de Severidade & Busca */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* Pills de Severidade Rápidas */}
+          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border">
+            {[
+              { id: "ALL", label: "Todas", count: vulns.length },
+              { id: "CRITICAL", label: "Crítica", count: counts.CRITICAL, color: "text-rose-400" },
+              { id: "HIGH", label: "Alta", count: counts.HIGH, color: "text-amber-400" },
+              { id: "MEDIUM", label: "Média", count: counts.MEDIUM, color: "text-indigo-400" },
+            ].map((s) => {
+              const active = filter === s.id
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setFilter(s.id)}
+                  className={cn(
+                    "px-2 py-1 text-[11px] font-bold rounded transition-all flex items-center gap-1",
+                    active
+                      ? "bg-card text-foreground shadow-sm border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <span className={s.color}>{s.label}</span>
+                  <span className="text-[10px] font-mono text-muted-foreground">({s.count})</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Busca Rápida */}
+          <div className="relative flex-1 sm:w-60">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Filtrar arquivo ou falha..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
+                title="Limpar busca"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Lista de Vulnerabilidades */}
+      {/* ── LISTA DE VULNERABILIDADES ─────────────────────────────────────────── */}
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <div className="saas-card p-12 text-center space-y-3">
+          <div className="saas-card p-12 text-center space-y-4">
             <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
-            <p className="text-sm font-semibold text-foreground">
-              {t.scan.noVulnFound}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t.scan.noVulnSub}
-            </p>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                {t.scan.noVulnFound}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Nenhuma vulnerabilidade correspondente aos filtros selecionados.
+              </p>
+            </div>
+            {(search || filter !== "ALL" || originFilter !== "ALL") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("")
+                  setFilter("ALL")
+                  setOriginFilter("ALL")
+                }}
+                className="btn-electric px-4 py-1.5 text-xs font-bold rounded-lg shadow-sm"
+              >
+                Limpar Busca e Filtros
+              </button>
+            )}
           </div>
         ) : (
           filtered.map((vuln, idx) => (
-            <VulnerabilityCard key={`${vuln.file}-${vuln.line}-${idx}`} vuln={vuln} />
+            <VulnerabilityCard
+              key={`${vuln.file}-${vuln.line}-${idx}`}
+              vuln={vuln}
+              defaultExpanded={search !== "" || filtered.length <= 2}
+            />
           ))
         )}
       </div>
+
+      {/* Modal de Attack Path Analysis */}
+      <AttackPathViewer
+        paths={attackPathsList}
+        isOpen={showAttackPaths}
+        onClose={() => setShowAttackPaths(false)}
+        onSelectVuln={(file, line) => {
+          setFilter("ALL")
+          setOriginFilter("ALL")
+          setSearch(file)
+        }}
+      />
+
+      {/* Modal de Scanner DAST */}
+      <DastScannerModal
+        isOpen={showDastModal}
+        onClose={() => setShowDastModal(false)}
+        onAddFindingsToReport={handleAddDastFindings}
+      />
     </div>
   )
 }
