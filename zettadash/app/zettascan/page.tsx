@@ -6,7 +6,7 @@ import {
   Search, ScanLine, Clock, GitBranch, ShieldOff, ArrowRight,
   ShieldAlert, AlertTriangle, Zap, CheckCircle2, Layers,
   Download, FileJson, FileText, Code2, Package, Server, ChevronDown,
-  Flame, Globe, Sparkles, Filter, RefreshCw
+  Flame, Globe, Sparkles, Filter, RefreshCw, X
 } from "lucide-react"
 import { VulnerabilityCard, type Vulnerability } from "@/components/scan/vulnerability-card"
 import { AttackPathViewer } from "@/components/scan/attack-path-viewer"

@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react"
 import { checkBackendHealth } from "@/lib/zettascan-api"
+import { checkGuardHealth } from "@/lib/zettaguard-api"
 import { QualityGateWidget } from "@/components/dash/quality-gate-widget"
 import { useLanguage } from "@/lib/language-provider"
 import { cn } from "@/lib/utils"
@@ -44,8 +45,15 @@ export default function DevOpsPage() {
       status: "checking",
     },
     {
+      name: "ZettaGuard LLM Shield",
+      desc: "Proteção LLM em Tempo Real, Regex L1 & IA L2",
+      port: "8002",
+      url: "http://localhost:8002/health",
+      status: "checking",
+    },
+    {
       name: "Next.js 16 App Router",
-      desc: "ZettaGuard UI & Telemetria ASPM",
+      desc: "ZettaDash UI & Telemetria ASPM",
       port: "3000",
       url: "/",
       status: "online",
@@ -57,19 +65,33 @@ export default function DevOpsPage() {
     setChecking(true)
 
     const t0 = performance.now()
-    const result = await checkBackendHealth()
-    const latency = Math.round(performance.now() - t0)
+    const [scanResult, guardResult] = await Promise.all([
+      checkBackendHealth(),
+      checkGuardHealth(),
+    ])
+    const scanLatency = Math.round(performance.now() - t0)
 
     setServices((prev) =>
       prev.map((s) => {
         if (s.port === "8000") {
           return {
             ...s,
-            status: result.status === "online" ? "online" : "offline",
-            latency: result.status === "online" ? latency : undefined,
+            status: scanResult.status === "online" ? "online" : "offline",
+            latency: scanResult.status === "online" ? scanLatency : undefined,
             detail:
-              result.status === "online"
-                ? `Semgrep: ${result.semgrep ?? "ok"} · Gemini: ${result.gemini ?? "ok"}`
+              scanResult.status === "online"
+                ? `Semgrep: ${scanResult.semgrep ?? "ok"} · Gemini: ${scanResult.gemini ?? "ok"}`
+                : "Sem resposta do backend",
+          }
+        }
+        if (s.port === "8002") {
+          return {
+            ...s,
+            status: guardResult.status === "online" ? "online" : "offline",
+            latency: guardResult.status === "online" ? guardResult.latency : undefined,
+            detail:
+              guardResult.status === "online"
+                ? `Motor 3 Camadas · Gemini: ${guardResult.gemini_configurado ? "Ativo" : "Fallback L1"}`
                 : "Sem resposta do backend",
           }
         }

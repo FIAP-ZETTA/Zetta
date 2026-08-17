@@ -14,7 +14,7 @@ O Zetta Guard é composto por três módulos principais que trabalham juntos.
 
 **ZettaScan** é o motor de descoberta e análise. Ele mapeia o repositório da empresa usando um token de acesso com permissão somente leitura, analisa o código com Semgrep e consulta o OSV.dev, base pública do Google, para identificar CVEs nas dependências. Quando a varredura termina, a inteligência artificial entra em cena para gerar uma explicação em linguagem simples de cada problema encontrado, incluindo o trecho de código corrigido pronto para aplicar.
 
-**ZettaGuard** protege os sistemas de inteligência artificial da própria empresa. Qualquer organização que usa chatbots ou assistentes virtuais está exposta a ataques de prompt injection, um vetor que a maioria das ferramentas tradicionais de segurança simplesmente ignora. O ZettaGuard atua como uma camada invisível entre o usuário e o sistema de IA, analisando as interações em tempo real e bloqueando tentativas maliciosas antes que causem dano.
+**ZettaGuard** protege os sistemas de inteligência artificial da própria empresa. Qualquer organização que usa chatbots ou assistentes virtuais está exposta a ataques de prompt injection, jailbreak e exfiltração de dados, um vetor que a maioria das ferramentas tradicionais de segurança ignora. O ZettaGuard atua como um firewall e middleware invisível entre o usuário e o modelo de IA, analisando interações em tempo real com um motor de 3 camadas (L1 Regex curados com ~60 padrões, L2 Classificação Semântica com Gemini 2.0 e L3 Inspeção de Saída para prevenção de Data Leakage) e bloqueando tentativas maliciosas antes que causem dano.
 
 **ZettaDash** é o coração da plataforma: um painel central que reúne tudo em uma tela só. O motor de priorização cruza três fatores para definir o que precisa de atenção imediata: a gravidade técnica da falha, se o sistema afetado está exposto publicamente e qual a criticidade daquele sistema para o negócio.
 
@@ -29,8 +29,9 @@ Basta dar **duplo clique** no arquivo **`iniciar.bat`** na raiz do projeto (ou r
 
 O script faz tudo sozinho:
 1. Instala as dependências Python do **ZettaScan** e inicia a API em `http://localhost:8000`.
-2. Instala os pacotes do **ZettaDash** e sobe o painel web em `http://localhost:3000`.
-3. Abre automaticamente o navegador na tela principal.
+2. Instala as dependências Python do **ZettaGuard** e inicia o firewall de IA em `http://localhost:8002`.
+3. Instala os pacotes do **ZettaDash** e sobe o painel web em `http://localhost:3000`.
+4. Abre automaticamente o navegador na tela principal.
 
 > **Pré-requisitos mínimos no PC do desenvolvedor:**
 > - [Python 3.11+](https://www.python.org/downloads/)

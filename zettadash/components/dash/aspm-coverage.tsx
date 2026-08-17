@@ -2,6 +2,7 @@
 
 import { useLanguage } from "@/lib/language-provider"
 import { loadConsolidatedScanResult, getActiveRepoUrl, loadDastResult } from "@/lib/zettascan-api"
+import { getGuardStats } from "@/lib/zettaguard-api"
 import { useEffect, useState } from "react"
 import {
   Code2, Package, GitBranch, Server,
@@ -32,12 +33,20 @@ export function AspmCoverageTracker({ compact = false }: { compact?: boolean }) 
   const [scaCount, setScaCount] = useState(0)
   const [iacCount, setIacCount] = useState(0)
   const [dastCount, setDastCount] = useState<number | undefined>(undefined)
+  const [guardCount, setGuardCount] = useState<number | undefined>(undefined)
 
   useEffect(() => {
-    function load() {
+    async function load() {
       const activeUrl = getActiveRepoUrl()
       const result = loadConsolidatedScanResult(activeUrl)
       const dastRes = loadDastResult()
+      const guardStats = await getGuardStats()
+
+      if (guardStats && guardStats.total > 0) {
+        setGuardCount(guardStats.bloqueados)
+      } else {
+        setGuardCount(undefined)
+      }
 
       if (dastRes) {
         setDastCount(dastRes.total_findings)
@@ -61,9 +70,11 @@ export function AspmCoverageTracker({ compact = false }: { compact?: boolean }) 
     load()
     window.addEventListener("zettascan:repo_change", load)
     window.addEventListener("zettascan:dast_change", load)
+    window.addEventListener("zettaguard:event_added", load)
     return () => {
       window.removeEventListener("zettascan:repo_change", load)
       window.removeEventListener("zettascan:dast_change", load)
+      window.removeEventListener("zettaguard:event_added", load)
     }
   }, [])
 
@@ -119,14 +130,14 @@ export function AspmCoverageTracker({ compact = false }: { compact?: boolean }) 
     {
       id: 5,
       key: "layer5",
-      statusKey: dastCount !== undefined ? "active" : "monitored",
-      icon: Globe,
+      statusKey: "active",
+      icon: ShieldCheck,
       color: "text-emerald-400",
       bgColor: "bg-emerald-500/10",
       borderColor: "border-emerald-500/30",
-      poweredBy: ["DAST", "Runtime"],
-      count: dastCount,
-      href: "/zettascan",
+      poweredBy: ["ZettaGuard", "LLM WAF"],
+      count: guardCount,
+      href: "/zettaguard",
     },
   ]
 
@@ -153,7 +164,7 @@ export function AspmCoverageTracker({ compact = false }: { compact?: boolean }) 
     { title: "Dependências (SCA)", desc: "Vulnerabilidades CVEs" },
     { title: "Pipeline CI/CD", desc: "Quality Gate & Workflows" },
     { title: "Containers & IaC", desc: "Dockerfile & Infraestrutura" },
-    { title: "Runtime & DAST", desc: "Sondagem Dinâmica HTTP" },
+    { title: "Runtime & IA", desc: "ZettaGuard LLM Shield & DAST" },
   ]
 
   const activeCount = layers.filter(l => l.statusKey === "active").length

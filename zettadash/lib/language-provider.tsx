@@ -3,10 +3,12 @@
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { dictionary, type Language } from "@/lib/i18n"
 
+export type DictionaryType = typeof dictionary.pt
+
 interface LanguageContextType {
   lang: Language
   setLang: (lang: Language) => void
-  t: typeof dictionary.pt
+  t: DictionaryType
 }
 
 const LanguageContext = createContext<LanguageContextType>({
@@ -38,7 +40,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }
 
-  const currentDict = dictionary[lang] ?? dictionary.pt
+  const currentDict = (dictionary[lang] ?? dictionary.pt) as DictionaryType
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t: currentDict }}>
