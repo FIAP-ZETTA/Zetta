@@ -76,17 +76,20 @@ def _severidade_maxima(sev_a: str, sev_b: str) -> str:
 
 def _obter_modelo():
     """
-    [A-5] Instanciação lazy — o modelo só é criado quando necessário,
-    não no import. Isso evita erros de chave ausente no momento do carregamento
-    do módulo e facilita testes unitários com mock.
+    [A-5] Instanciação lazy — o modelo só é criado quando necessário.
+    Retorna None se GEMINI_API_KEY não estiver configurada.
     """
-    # pyrefly: ignore [missing-import]
-    import google.generativeai as genai  # import local para lazy init
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("GEMINI_API_KEY não configurada. Adicione ao arquivo .env")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.5-flash")
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key or api_key == "your_gemini_api_key_here":
+        logger.warning("[ZettaScan] GEMINI_API_KEY não configurada no .env. Análise continuará com regras SAST nativas.")
+        return None
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel("gemini-2.5-flash")
+    except Exception as e:
+        logger.warning("[ZettaScan] Não foi possível inicializar Gemini (%s). Usando motor nativo.", e)
+        return None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -131,16 +134,34 @@ def _remover_duplicatas(findings: List[Dict]) -> List[Dict]:
 
 def _fallback_finding(finding: Dict) -> Dict:
     """
-    [A-4] Gera um item de fallback no formato correto do contrato de API,
-    sem incluir trecho_codigo (que poderia vazar código do cliente no relatório).
+    [A-4] Gera um item de fallback no formato correto do contrato de API.
+    Formata títulos e descrições a partir das regras de segurança detectadas.
     """
+    raw_rule = finding.get("regra") or finding.get("cve_id") or finding.get("titulo") or "Vulnerabilidade Detectada"
+    # Transforma 'python.flask.security.injection.sql-injection' em 'Sql Injection'
+    titulo = raw_rule.split(".")[-1].replace("-", " ").replace("_", " ").title() if "." in raw_rule else raw_rule
+
+    msg = finding.get("mensagem") or finding.get("explicacao") or f"Detectado padrão de risco ({raw_rule}) pelo motor de análise estática."
+    
+    impacto_sugerido = finding.get("impacto") or (
+        "Risco de comprometimento de dados, execução indevida ou exposição de credenciais confidenciais."
+        if finding.get("severidade") in ("CRITICAL", "HIGH")
+        else "Possível desvio de boas práticas de segurança ou exposição de informações de depuração."
+    )
+
+    correcao_sugerida = finding.get("correcao") or (
+        "Valide e sanitize todas as entradas de usuário, utilize consultas parametrizadas e remova credenciais hardcoded."
+        if finding.get("severidade") in ("CRITICAL", "HIGH")
+        else "Revise o trecho indicado e aplique sanitização ou configurações recomendadas pelo framework."
+    )
+
     return {
-        "titulo": finding.get("regra") or finding.get("cve_id") or "Achado de segurança",
-        "explicacao": finding.get("mensagem") or finding.get("titulo") or "Ver ferramenta de origem.",
-        "impacto": "Não foi possível obter explicação da IA para este achado.",
-        "correcao": "Revise o achado manualmente.",
+        "titulo": titulo,
+        "explicacao": msg,
+        "impacto": impacto_sugerido,
+        "correcao": correcao_sugerida,
         "severidade": finding.get("severidade", "MEDIUM"),
-        "arquivo": finding.get("arquivo") or finding.get("pacote") or "",
+        "arquivo": finding.get("arquivo") or finding.get("pacote") or "desconhecido",
         "linha": finding.get("linha") or 0,
         "tipo": finding.get("tipo", "codigo"),
     }
@@ -279,6 +300,12 @@ def priorizar_com_ia(vulns_semgrep: List[Dict], vulns_osv: List[Dict]) -> List[D
     }
 
     modelo = _obter_modelo()
+    if not modelo:
+        logger.info("[ZettaScan] Gerando %d achados via motor de regras estáticas (sem IA).", len(todas))
+        resultado = [_fallback_finding(item) for item in todas]
+        resultado.sort(key=lambda x: _ORDEM_SEVERIDADE.get(x.get("severidade", "LOW"), 99))
+        return resultado
+
     lotes = list(_dividir_em_lotes(reduzidos, 10))
     resultado: List[Dict] = []
 

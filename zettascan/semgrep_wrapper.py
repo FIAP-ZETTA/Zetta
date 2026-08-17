@@ -180,14 +180,15 @@ def _analisador_sast_nativo(caminho_repo: str) -> List[Dict]:
 def rodar_semgrep(caminho_repo: str) -> List[Dict]:
     """
     Executa a análise estática no repositório.
-    Tenta o Semgrep oficial; se indisponível (ou no Windows), usa o motor SAST nativo.
+    Tenta o Semgrep oficial em qualquer plataforma (incluindo Windows).
+    Se indisponível ou falhar, usa o motor SAST nativo como fallback.
     """
     logger.info("[ZettaScan] Iniciando varredura estática de código em: %s", caminho_repo)
 
     semgrep_exe = _encontrar_semgrep()
-    
-    # Se semgrep estiver disponível e não for Windows puro com erro de resource, tenta rodar
-    if semgrep_exe and os.name != "nt":
+
+    if semgrep_exe:
+        logger.info("[ZettaScan] Semgrep encontrado em: %s. Executando análise...", semgrep_exe)
         try:
             resultado = subprocess.run(
                 [
@@ -206,7 +207,12 @@ def rodar_semgrep(caminho_repo: str) -> List[Dict]:
                 timeout=300,
             )
             if resultado.stdout.strip():
-                dados = json.loads(resultado.stdout)
+                try:
+                    dados = json.loads(resultado.stdout)
+                except json.JSONDecodeError as je:
+                    logger.warning("[ZettaScan] Semgrep retornou JSON inválido (%s). Usando fallback SAST.", je)
+                    return _analisador_sast_nativo(caminho_repo)
+
                 resultados_brutos = dados.get("results", [])
                 vulnerabilidades: List[Dict] = []
                 for item in resultados_brutos:
@@ -224,8 +230,22 @@ def rodar_semgrep(caminho_repo: str) -> List[Dict]:
                     })
                 logger.info("[ZettaScan] Semgrep encontrou %d problema(s).", len(vulnerabilidades))
                 return vulnerabilidades
+            else:
+                # stdout vazio pode significar sem achados (não é erro)
+                stderr_info = resultado.stderr[:300] if resultado.stderr else ""
+                logger.info("[ZettaScan] Semgrep sem resultados (rc=%d). stderr: %s", resultado.returncode, stderr_info)
+                # Retorna lista vazia se saiu com 0 (sem achados) ou fallback se erro
+                if resultado.returncode in (0, 1):  # 0=ok, 1=achados (semgrep rc semântico)
+                    return []
+                logger.warning("[ZettaScan] Semgrep saiu com rc=%d. Usando fallback SAST.", resultado.returncode)
+        except FileNotFoundError:
+            logger.warning("[ZettaScan] Semgrep não encontrado no PATH. Usando fallback SAST nativo.")
+        except subprocess.TimeoutExpired:
+            logger.warning("[ZettaScan] Semgrep excedeu o tempo limite. Usando fallback SAST nativo.")
         except Exception as e:
             logger.warning("[ZettaScan] Semgrep CLI falhou (%s). Recorrendo ao motor SAST nativo...", e)
+    else:
+        logger.warning("[ZettaScan] Semgrep não encontrado no sistema. Execute: pip install semgrep. Usando motor SAST nativo.")
 
     # Fallback SAST nativo de alta performance
     return _analisador_sast_nativo(caminho_repo)

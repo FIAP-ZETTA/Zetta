@@ -2,331 +2,297 @@
 
 import { useEffect, useState, useCallback } from "react"
 import {
+  Server,
+  Activity,
+  Cpu,
+  RefreshCw,
   CheckCircle2,
   XCircle,
-  RefreshCw,
   Clock,
-  Activity,
+  Layers,
+  Container,
+  Network,
   Globe,
   GitBranch,
-  Cpu,
-  ScanLine,
-  Wifi,
   WifiOff,
-  Layers,
-  HardDrive,
 } from "lucide-react"
-import { Card } from "@/components/ui/card"
+import { checkBackendHealth, loadScanResult, type ScanResponse } from "@/lib/zettascan-api"
+import { useLanguage } from "@/lib/language-provider"
 import { cn } from "@/lib/utils"
-import { healthCheck, loadScanResult, type ScanResponse } from "@/lib/zettascan-api"
 
-type ServiceStatus = "online" | "offline" | "checking"
-
-interface Service {
-  id: string
+interface ServiceStatus {
   name: string
-  description: string
+  desc: string
   port: string
-  status: ServiceStatus
+  url: string
+  status: "online" | "offline" | "checking"
   latency?: number
   detail?: string
-  icon: any
 }
 
-const DOCKER_SERVICES: Array<Omit<Service, "status">> = [
-  {
-    id: "zettascan",
-    name: "ZettaScan",
-    description: "Motor de análise de segurança — FastAPI + Semgrep + Gemini",
-    port: ":8000",
-    icon: ScanLine,
-  },
-  {
-    id: "zettadash",
-    name: "ZettaDash",
-    description: "Frontend dashboard — Next.js 16",
-    port: ":3000",
-    icon: Globe,
-  },
-]
-
-const dockerInfoCards = [
-  { label: "Orquestração", value: "Docker Compose", icon: Layers, sub: "docker-compose.yml" },
-  { label: "Rede interna", value: "zetta_net", icon: Wifi, sub: "bridge driver" },
-  { label: "Backend base", value: "Python 3.11", icon: Cpu, sub: "slim + multi-stage" },
-  { label: "Frontend base", value: "Node 20", icon: HardDrive, sub: "slim + standalone" },
-]
-
 export default function DevOpsPage() {
-  const [services, setServices] = useState<Service[]>(
-    DOCKER_SERVICES.map((s) => ({ ...s, status: "checking" as ServiceStatus }))
-  )
-  const [lastChecked, setLastChecked] = useState<Date | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const { t } = useLanguage()
+  const [lastCheck, setLastCheck] = useState<Date | null>(null)
+  const [checking, setChecking] = useState(false)
   const [lastScan, setLastScan] = useState<ScanResponse | null>(null)
 
+  const [services, setServices] = useState<ServiceStatus[]>([
+    {
+      name: "FastAPI + Semgrep Engine",
+      desc: "SAST & security rule evaluation",
+      port: "8000",
+      url: "http://localhost:8000/health",
+      status: "checking",
+    },
+    {
+      name: "Next.js 16 App Router",
+      desc: "ZettaGuard UI & ASPM telemetry platform",
+      port: "3000",
+      url: "/",
+      status: "online",
+      latency: 12,
+    },
+  ])
+
+  const runHealthCheck = useCallback(async () => {
+    setChecking(true)
+
+    // Checar FastAPI (porta 8000)
+    const t0 = performance.now()
+    const result = await checkBackendHealth()
+    const latency = Math.round(performance.now() - t0)
+
+    setServices((prev) =>
+      prev.map((s) => {
+        if (s.port === "8000") {
+          return {
+            ...s,
+            status: result.status === "online" ? "online" : "offline",
+            latency: result.status === "online" ? latency : undefined,
+            detail:
+              result.status === "online"
+                ? `Engine: ${result.semgrep ?? "ok"} | Gemini: ${result.gemini ?? "ok"}`
+                : "Sem resposta do backend",
+          }
+        }
+        return s
+      })
+    )
+
+    setLastCheck(new Date())
+    setChecking(false)
+  }, [])
+
   useEffect(() => {
+    runHealthCheck()
     setLastScan(loadScanResult())
-  }, [])
+  }, [runHealthCheck])
 
-  const checkServices = useCallback(async () => {
-    setIsRefreshing(true)
-
-    const zettscanHealth = await healthCheck()
-
-    setServices([
-      {
-        id: "zettascan",
-        name: "ZettaScan",
-        description: "Motor de análise de segurança — FastAPI + Semgrep + Gemini",
-        port: ":8000",
-        icon: ScanLine,
-        status: zettscanHealth.online ? "online" : "offline",
-        latency: zettscanHealth.latency,
-        detail: zettscanHealth.detail,
-      },
-      {
-        id: "zettadash",
-        name: "ZettaDash",
-        description: "Frontend dashboard — Next.js 16",
-        port: ":3000",
-        icon: Globe,
-        status: "online",
-        latency: undefined,
-      },
-    ])
-
-    setLastChecked(new Date())
-    setIsRefreshing(false)
-  }, [])
-
-  useEffect(() => {
-    checkServices()
-  }, [checkServices])
-
-  const onlineCount = services.filter((s) => s.status === "online").length
-  const totalCount = services.length
+  const dockerInfoCards = [
+    {
+      label: t.devops.orchestration,
+      value: "docker-compose.yml",
+      sub: t.devops.orchestrationSub,
+      icon: Layers,
+    },
+    {
+      label: t.devops.internalNetwork,
+      value: "bridge driver",
+      sub: t.devops.internalNetworkSub,
+      icon: Network,
+    },
+    {
+      label: t.devops.backendBase,
+      value: "fastapi + uvicorn",
+      sub: t.devops.backendBaseSub,
+      icon: Cpu,
+    },
+    {
+      label: t.devops.frontendBase,
+      value: "standalone build",
+      sub: t.devops.frontendBaseSub,
+      icon: Container,
+    },
+  ]
 
   return (
-    <div className="space-y-6">
-      {/* Overall status banner */}
-      <Card
-        className={cn(
-          "flex flex-wrap items-center justify-between gap-4 border-l-4 p-5",
-          onlineCount === totalCount
-            ? "border-l-chart-3 bg-chart-3/5"
-            : onlineCount === 0
-              ? "border-l-destructive bg-destructive/5"
-              : "border-l-chart-4 bg-chart-4/5"
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <Activity
-            className={cn(
-              "h-5 w-5",
-              onlineCount === totalCount
-                ? "text-chart-3"
-                : onlineCount === 0
-                  ? "text-destructive"
-                  : "text-chart-4"
-            )}
-          />
-          <div>
-            <p className="font-heading text-sm font-semibold text-foreground">
-              {onlineCount === totalCount
-                ? "Todos os serviços operacionais"
-                : `${onlineCount}/${totalCount} serviços online`}
-            </p>
-            {lastChecked && (
-              <p className="text-xs text-muted-foreground">
-                Último check: {lastChecked.toLocaleTimeString("pt-BR")}
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Header com Ação de Verificação */}
+      <div className="saas-card p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center bg-primary/10 border border-primary/30 text-primary">
+              <Activity className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="font-heading text-base font-bold text-foreground">
+                {t.devops.serviceHealth}
+              </h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {lastCheck
+                  ? t.devops.lastCheck.replace("{time}", lastCheck.toLocaleTimeString())
+                  : t.devops.checkingInitial}
               </p>
-            )}
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={checkServices}
-          disabled={isRefreshing}
-          className="flex items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
-          {isRefreshing ? "Verificando..." : "Verificar agora"}
-        </button>
-      </Card>
 
-      {/* Service cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
+          <button
+            id="btn-recheck-health"
+            onClick={runHealthCheck}
+            disabled={checking}
+            className="btn-electric px-4 py-2 text-xs font-bold shrink-0 disabled:opacity-50"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", checking && "animate-spin")} />
+            {checking ? t.devops.testing + "..." : t.devops.checkNow}
+          </button>
+        </div>
+      </div>
+
+      {/* Grid de Serviços */}
+      <div className="grid gap-4 md:grid-cols-2">
         {services.map((svc) => {
-          const Icon = svc.icon
           const isOnline = svc.status === "online"
           const isChecking = svc.status === "checking"
+
           return (
-            <Card key={svc.id} className="p-5 space-y-4">
+            <div
+              key={svc.name}
+              className={cn(
+                "saas-card p-5 space-y-4 border-l-[3px]",
+                isOnline ? "border-l-emerald-500" : isChecking ? "border-l-amber-500" : "border-l-rose-500"
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={cn(
-                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1",
-                      isOnline
-                        ? "bg-chart-3/10 ring-chart-3/30"
-                        : isChecking
-                          ? "bg-muted ring-border"
-                          : "bg-destructive/10 ring-destructive/30"
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "h-5 w-5",
-                        isOnline
-                          ? "text-chart-3"
-                          : isChecking
-                            ? "text-muted-foreground"
-                            : "text-destructive"
-                      )}
-                    />
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-card border border-border text-primary mt-0.5">
+                    {svc.port === "8000" ? <Server className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
                   </div>
-                  <div>
-                    <p className="font-heading text-sm font-semibold text-foreground">
-                      {svc.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{svc.description}</p>
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs font-bold text-foreground truncate">{svc.name}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{svc.desc}</p>
                   </div>
                 </div>
 
                 <div className="shrink-0">
                   {isChecking ? (
-                    <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                      Verificando
+                    <span className="flex items-center gap-1.5 bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">
+                      <RefreshCw className="h-3 w-3 animate-spin" /> {t.devops.testing}
                     </span>
                   ) : isOnline ? (
-                    <span className="flex items-center gap-1.5 rounded-full bg-chart-3/15 px-2.5 py-1 text-xs font-medium text-chart-3 ring-1 ring-chart-3/30">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Online
+                    <span className="flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-500 border border-emerald-500/25">
+                      <CheckCircle2 className="h-3 w-3" /> {t.devops.online}
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1.5 rounded-full bg-destructive/15 px-2.5 py-1 text-xs font-medium text-destructive ring-1 ring-destructive/30">
-                      <XCircle className="h-3 w-3" />
-                      Offline
+                    <span className="flex items-center gap-1.5 bg-rose-500/10 px-2.5 py-1 text-[11px] font-bold text-rose-500 border border-rose-500/25">
+                      <XCircle className="h-3 w-3" /> {t.devops.offline}
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md bg-muted/50 px-3 py-2">
-                  <p className="text-muted-foreground">Porta</p>
-                  <p className="font-mono font-medium text-foreground">{svc.port}</p>
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div className="bg-muted/40 px-3 py-2 border border-border">
+                  <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">{t.devops.port}</p>
+                  <p className="font-mono font-bold text-foreground mt-0.5">{svc.port}</p>
                 </div>
-                <div className="rounded-md bg-muted/50 px-3 py-2">
-                  <p className="text-muted-foreground">Latência</p>
-                  <p className="font-mono font-medium text-foreground">
-                    {svc.latency != null
-                      ? `${svc.latency}ms`
-                      : isChecking
-                        ? "—"
-                        : svc.detail ?? "N/A"}
+                <div className="bg-muted/40 px-3 py-2 border border-border">
+                  <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">{t.devops.latency}</p>
+                  <p className="font-mono font-bold text-foreground mt-0.5">
+                    {svc.latency != null ? (
+                      <span className={svc.latency < 200 ? "text-emerald-500 font-bold" : "text-amber-500 font-bold"}>
+                        {svc.latency}ms
+                      </span>
+                    ) : isChecking ? "—" : svc.detail ?? "N/A"}
                   </p>
                 </div>
               </div>
 
               {!isOnline && !isChecking && svc.detail && (
-                <p className="text-xs text-destructive/80 bg-destructive/5 rounded-md px-3 py-2">
+                <p className="text-xs text-rose-500 bg-rose-500/10 p-2.5 border border-rose-500/20">
                   {svc.detail}
                 </p>
               )}
-            </Card>
+            </div>
           )
         })}
       </div>
 
-      {/* Docker infra info */}
+      {/* Docker Infra Bento */}
       <div>
-        <h2 className="font-heading text-base font-semibold text-foreground mb-3">
-          Infraestrutura Docker
+        <h2 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 px-1">
+          {t.devops.architecture}
         </h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {dockerInfoCards.map((c) => {
             const Icon = c.icon
             return (
-              <Card key={c.label} className="flex items-center gap-3 p-4">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/25">
-                  <Icon className="h-4.5 w-4.5 text-primary" />
+              <div key={c.label} className="saas-card p-4 flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-primary/10 text-primary">
+                  <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {c.label}
-                  </p>
-                  <p className="truncate font-heading text-sm font-semibold text-foreground">
-                    {c.value}
-                  </p>
-                  <p className="truncate text-[11px] text-muted-foreground">{c.sub}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">{c.label}</p>
+                  <p className="truncate font-heading text-xs font-bold text-foreground mt-0.5">{c.value}</p>
+                  <p className="truncate text-[10px] text-muted-foreground/70">{c.sub}</p>
                 </div>
-              </Card>
+              </div>
             )
           })}
         </div>
       </div>
 
-      {/* Last scan summary */}
-      <Card className="p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <h2 className="font-heading text-base font-semibold text-foreground">
-            Último scan realizado
-          </h2>
+      {/* Last Scan Status */}
+      <div className="saas-card p-5">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="flex h-8 w-8 items-center justify-center bg-primary/10 text-primary">
+            <Clock className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="font-heading text-sm font-bold text-foreground">{t.devops.lastAudit}</h3>
+            <p className="text-[11px] text-muted-foreground">{t.devops.aspmData}</p>
+          </div>
         </div>
+
         {lastScan ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-3">
-              <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs">
-                <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-mono text-foreground">{lastScan.repositorio}</span>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2 text-xs">
+              <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 border border-border">
+                <GitBranch className="h-3.5 w-3.5 text-primary" />
+                <span className="font-mono text-foreground font-semibold">{lastScan.repositorio}</span>
               </div>
               {lastScan.scanned_at && (
-                <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 border border-border text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
-                  {new Date(lastScan.scanned_at).toLocaleString("pt-BR")}
+                  {new Date(lastScan.scanned_at).toLocaleString()}
                 </div>
               )}
-              <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                <Activity className="h-3.5 w-3.5" />
-                {lastScan.tempo_segundos}s de análise
+              <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 border border-border text-muted-foreground">
+                <Activity className="h-3.5 w-3.5 text-emerald-500" />
+                {t.devops.analysisDuration.replace("{sec}", String(lastScan.tempo_segundos))}
               </div>
             </div>
+
             <div className="grid grid-cols-4 gap-2 text-center">
               {[
-                { label: "Total", v: lastScan.total_vulnerabilidades, cls: "text-foreground" },
-                { label: "Críticas", v: lastScan.criticas, cls: "text-destructive" },
-                { label: "Altas", v: lastScan.altas, cls: "text-chart-4" },
-                { label: "Médias", v: lastScan.medias, cls: "text-chart-2" },
-              ].map((item) => (
-                <div key={item.label} className="rounded-lg bg-muted/40 p-3">
-                  <p className={cn("font-heading text-xl font-bold", item.cls)}>{item.v}</p>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
-                    {item.label}
-                  </p>
+                { label: t.devops.total,    v: lastScan.total_vulnerabilidades, cls: "text-foreground" },
+                { label: t.devops.criticas, v: lastScan.criticas,               cls: "text-rose-500 font-bold" },
+                { label: t.devops.altas,    v: lastScan.altas,                  cls: "text-amber-500 font-bold" },
+                { label: t.devops.medias,   v: lastScan.medias,                 cls: "text-indigo-500 font-bold" },
+              ].map(item => (
+                <div key={item.label} className="bg-muted/40 p-3 border border-border">
+                  <p className={cn("font-heading text-xl font-extrabold", item.cls)}>{item.v}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mt-0.5">{item.label}</p>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-3 text-muted-foreground text-sm">
-            <WifiOff className="h-4 w-4" />
-            <span>
-              Nenhum scan realizado ainda.{" "}
-              <a
-                href="/configuracoes"
-                className="text-primary underline underline-offset-2"
-              >
-                Conecte um repositório
-              </a>{" "}
-              para iniciar.
-            </span>
+          <div className="flex items-center gap-3 text-muted-foreground text-xs py-2">
+            <WifiOff className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+            <span>{t.devops.noScanYet}</span>
           </div>
         )}
-      </Card>
+      </div>
     </div>
   )
 }

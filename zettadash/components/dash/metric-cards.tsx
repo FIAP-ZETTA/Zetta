@@ -1,80 +1,154 @@
-import { ShieldX, AlertTriangle, Server, TrendingUp, TrendingDown } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+"use client"
 
-const metrics = [
-  {
-    label: "Ameaças Bloqueadas",
-    value: "48.392",
-    delta: "+12,4%",
-    up: true,
-    icon: ShieldX,
-    accent: "text-primary",
-    ring: "ring-primary/25",
-    bg: "bg-primary/10",
-    spark: [12, 18, 14, 22, 19, 28, 24, 34],
-  },
-  {
-    label: "Alertas Críticos",
-    value: "27",
-    delta: "+5",
-    up: true,
-    icon: AlertTriangle,
-    accent: "text-destructive",
-    ring: "ring-destructive/25",
-    bg: "bg-destructive/10",
-    spark: [4, 6, 5, 9, 7, 12, 10, 14],
-  },
-  {
-    label: "Ativos Monitorados",
-    value: "1.284",
-    delta: "-0,8%",
-    up: false,
-    icon: Server,
-    accent: "text-chart-3",
-    ring: "ring-chart-3/25",
-    bg: "bg-chart-3/10",
-    spark: [30, 28, 31, 29, 27, 26, 25, 24],
-  },
-]
+import { useEffect, useState, useCallback } from "react"
+import { ShieldAlert, AlertTriangle, Layers, ArrowRight, GitBranch } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useLanguage } from "@/lib/language-provider"
+import {
+  loadConsolidatedScanResult,
+  getActiveRepoUrl,
+  getSavedRepositories,
+} from "@/lib/zettascan-api"
+import Link from "next/link"
+
+interface MetricData {
+  label: string
+  value: string | number
+  sub: string
+  icon: any
+  color: string
+  border: string
+  fill: number
+}
 
 export function MetricCards() {
+  const { t } = useLanguage()
+  const [metrics, setMetrics] = useState<MetricData[] | null>(null)
+  const [repoCount, setRepoCount] = useState(0)
+
+  const refresh = useCallback(() => {
+    const activeUrl = getActiveRepoUrl()
+    const result = loadConsolidatedScanResult(activeUrl)
+    const allRepos = getSavedRepositories()
+    setRepoCount(allRepos.length)
+
+    if (!result) {
+      setMetrics(null)
+      return
+    }
+
+    const total = result.total_vulnerabilidades || 1
+    const isConsolidated = !activeUrl && allRepos.length > 1
+    const repoLabel = isConsolidated
+      ? t.dash.totalSubInRepos.replace("{count}", String(allRepos.length))
+      : t.dash.totalSubInSingle.replace("{repo}", result.repositorio.split("/").pop() ?? "repository")
+
+    setMetrics([
+      {
+        label: t.dash.criticalVulns,
+        value: result.criticas,
+        sub: t.dash.criticalSub.replace("{crit}", String(result.criticas)).replace("{total}", String(result.total_vulnerabilidades)),
+        icon: ShieldAlert,
+        color: "text-rose-500",
+        border: "border-l-rose-500",
+        fill: Math.min(100, (result.criticas / total) * 100),
+      },
+      {
+        label: t.dash.highRisk,
+        value: result.altas,
+        sub: t.dash.highSub.replace("{high}", String(result.altas)),
+        icon: AlertTriangle,
+        color: "text-amber-500",
+        border: "border-l-amber-500",
+        fill: Math.min(100, (result.altas / total) * 100),
+      },
+      {
+        label: t.dash.totalDetected,
+        value: result.total_vulnerabilidades,
+        sub: repoLabel,
+        icon: isConsolidated ? Layers : GitBranch,
+        color: "text-primary",
+        border: "border-l-primary",
+        fill: 100,
+      },
+    ])
+  }, [t])
+
+  useEffect(() => {
+    refresh()
+    const handler = () => refresh()
+    window.addEventListener("zettascan:repo_change", handler)
+    return () => window.removeEventListener("zettascan:repo_change", handler)
+  }, [refresh])
+
+  if (!metrics) {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            { label: t.dash.criticalVulns, icon: ShieldAlert, color: "text-rose-500" },
+            { label: t.dash.highRisk, icon: AlertTriangle, color: "text-amber-500" },
+            { label: t.dash.totalDetected, icon: Layers, color: "text-primary" },
+          ].map((c) => {
+            const Icon = c.icon
+            return (
+              <div key={c.label} className="saas-card p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{c.label}</span>
+                  <Icon className={cn("h-4 w-4", c.color, "opacity-40")} />
+                </div>
+                <p className="font-heading text-3xl font-extrabold text-muted-foreground/30">—</p>
+                <p className="text-[10px] text-muted-foreground/50 mt-1">{t.dash.waitingScan}</p>
+              </div>
+            )
+          })}
+        </div>
+        <div className="saas-card p-4 border-dashed flex items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            {t.dash.noRepoWarning}
+          </p>
+          <Link
+            href="/configuracoes"
+            className="btn-electric px-3 py-1.5 text-xs font-bold shrink-0"
+          >
+            {t.dash.connectRepo} <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {metrics.map((m) => {
         const Icon = m.icon
-        const TrendIcon = m.up ? TrendingUp : TrendingDown
-        const max = Math.max(...m.spark)
         return (
-          <Card key={m.label} className="relative overflow-hidden p-5">
-            <div className="flex items-start justify-between">
-              <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg ring-1", m.bg, m.ring)}>
-                <Icon className={cn("h-5 w-5", m.accent)} aria-hidden="true" />
-              </div>
-              <span
-                className={cn(
-                  "flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-                  m.up ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-                )}
-              >
-                <TrendIcon className="h-3 w-3" aria-hidden="true" />
-                {m.delta}
-              </span>
+          <div
+            key={m.label}
+            className={cn(
+              "saas-card p-5 border-l-[3px] space-y-3",
+              m.border
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{m.label}</span>
+              <Icon className={cn("h-4 w-4", m.color)} />
             </div>
-            <div className="mt-4">
-              <p className="text-sm text-muted-foreground">{m.label}</p>
-              <p className="mt-1 font-heading text-3xl font-bold tracking-tight text-foreground">{m.value}</p>
+
+            <div>
+              <p className={cn("font-heading text-4xl font-extrabold tracking-tight", m.color)}>
+                {m.value}
+              </p>
+              <p className="text-[10px] font-mono text-muted-foreground mt-0.5">{m.sub}</p>
             </div>
-            <div className="mt-4 flex h-10 items-end gap-1">
-              {m.spark.map((v, i) => (
-                <span
-                  key={i}
-                  className={cn("flex-1 rounded-sm", m.bg)}
-                  style={{ height: `${(v / max) * 100}%` }}
-                />
-              ))}
+
+            <div className="h-1 w-full bg-muted overflow-hidden">
+              <div
+                className={cn("h-full", m.border.replace("border-l-", "bg-"))}
+                style={{ width: `${m.fill}%` }}
+              />
             </div>
-          </Card>
+          </div>
         )
       })}
     </div>

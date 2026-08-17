@@ -1,318 +1,295 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-  FolderGit2,
-  Link2,
+  ShieldAlert,
+  GitBranch,
   KeyRound,
-  Play,
-  Loader2,
   CheckCircle2,
   AlertCircle,
+  RefreshCw,
+  ArrowRight,
+  Link2,
   X,
-  ExternalLink,
 } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
+import { scanRepo, saveScanResult, type ScanResponse } from "@/lib/zettascan-api"
+import { useLanguage } from "@/lib/language-provider"
 import { cn } from "@/lib/utils"
-import { scanRepo, saveScanResult, ZettaScanError } from "@/lib/zettascan-api"
 
-// Estágios exibidos durante a varredura real (são apenas visuais —
-// o progresso real é controlado por um timer que avança lentamente
-// enquanto aguardamos a resposta da API, que pode levar até 5 min)
-const stages = [
-  "Clonando repositório...",
-  "Analisando dependências (OSV.dev)...",
-  "Varrendo código-fonte (Semgrep)...",
-  "Detectando vulnerabilidades...",
-  "Priorizando com IA (Gemini)...",
+const DEMO_REPOS = [
+  {
+    name: "we45/Vulnerable-Flask-App",
+    url: "https://github.com/we45/Vulnerable-Flask-App",
+    desc: "App Flask vulnerável (SQLi, SSTI, Hardcoded Secrets)",
+  },
+  {
+    name: "OWASP/NodeGoat",
+    url: "https://github.com/OWASP/NodeGoat",
+    desc: "Node.js OWASP Top 10 benchmark",
+  },
+  {
+    name: "juice-shop/juice-shop",
+    url: "https://github.com/juice-shop/juice-shop",
+    desc: "Aplicação intencionalmente vulnerável (Modern JS)",
+  },
 ]
 
-export function ScanForm() {
+interface ScanFormProps {
+  onScanComplete?: () => void
+}
+
+export function ScanForm({ onScanComplete }: ScanFormProps) {
   const router = useRouter()
-  const [token, setToken] = useState("")
+  const { t } = useLanguage()
   const [repo, setRepo] = useState("")
+  const [token, setToken] = useState("")
   const [scanning, setScanning] = useState(false)
-  const [done, setDone] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
-  const [stage, setStage] = useState(0)
+  const [stage, setStage] = useState<"cloning" | "analyzing" | "gemini" | "done">("cloning")
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
   const [resultSummary, setResultSummary] = useState<{
-    total: number; criticas: number; altas: number; tempo: number
+    total: number
+    criticas: number
+    altas: number
+    tempo: number
   } | null>(null)
 
-  // Abort controller para cancelar o fetch se o componente desmontar
-  const abortRef = useRef<AbortController | null>(null)
-  // Interval para o progresso animado
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort()
-      if (intervalRef.current) clearInterval(intervalRef.current)
+  function normalizeRepoInput(val: string): string {
+    const trimmed = val.trim()
+    if (!trimmed) return ""
+    if (trimmed.startsWith("https://") || trimmed.startsWith("http://")) return trimmed
+    if (/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(trimmed)) {
+      return `https://github.com/${trimmed}`
     }
-  }, [])
-
-  function startProgressAnimation() {
-    // Progresso avança devagar até ~90% enquanto a API processa.
-    // O salto para 100% acontece quando a API responder.
-    setProgress(2)
-    intervalRef.current = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 88) {
-          if (intervalRef.current) clearInterval(intervalRef.current)
-          return 88
-        }
-        const increment = Math.random() * 1.5 + 0.5
-        const next = Math.min(p + increment, 88)
-        setStage(Math.min(Math.floor((next / 90) * stages.length), stages.length - 1))
-        return next
-      })
-    }, 1800)
+    return trimmed
   }
 
-  function stopProgressAnimation() {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-  }
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setDone(false)
+    setResultSummary(null)
 
-  async function startScan() {
-    const repoUrl = repo.trim()
-    const tok = token.trim()
-
-    if (!repoUrl || !tok) {
-      setError("Preencha a URL do repositório e o token antes de iniciar.")
+    const finalRepo = normalizeRepoInput(repo)
+    if (!finalRepo) {
+      setError("Por favor, informe a URL ou o padrão usuario/repositorio do GitHub.")
       return
     }
 
     setScanning(true)
-    setDone(false)
-    setError(null)
-    setProgress(0)
-    setStage(0)
-    setResultSummary(null)
+    setProgress(15)
+    setStage("cloning")
 
-    abortRef.current = new AbortController()
-    startProgressAnimation()
+    const timer1 = setTimeout(() => {
+      setProgress(45)
+      setStage("analyzing")
+    }, 1200)
+
+    const timer2 = setTimeout(() => {
+      setProgress(75)
+      setStage("gemini")
+    }, 2400)
 
     try {
-      const result = await scanRepo(repoUrl, tok, abortRef.current.signal)
-      stopProgressAnimation()
-      saveScanResult(result)
+      const result: ScanResponse = await scanRepo(finalRepo, token)
+
+      clearTimeout(timer1)
+      clearTimeout(timer2)
       setProgress(100)
-      setStage(stages.length - 1)
-      setDone(true)
+      setStage("done")
+
+      saveScanResult(result)
+
       setResultSummary({
         total: result.total_vulnerabilidades,
         criticas: result.criticas,
         altas: result.altas,
         tempo: result.tempo_segundos,
       })
-    } catch (err: any) {
-      stopProgressAnimation()
-      if (err?.name === "AbortError") return // componente desmontado
 
-      let msg = "Erro ao conectar ao ZettaScan."
-      if (err instanceof ZettaScanError) {
-        msg = err.message
-      } else if (err?.message) {
-        msg = err.message
-      }
-      setError(msg)
+      setDone(true)
+      if (onScanComplete) onScanComplete()
+    } catch (err: any) {
+      clearTimeout(timer1)
+      clearTimeout(timer2)
+      setError(
+        err.message || t.connections.errorFallback
+      )
     } finally {
       setScanning(false)
     }
   }
 
-  function cancelScan() {
-    abortRef.current?.abort()
-    stopProgressAnimation()
-    setScanning(false)
-    setProgress(0)
-    setStage(0)
+  function handleDemoSelect(url: string) {
+    setRepo(url)
     setError(null)
   }
 
+  const stages: Record<typeof stage, string> = {
+    cloning: "Clonando repositório em ambiente isolado...",
+    analyzing: "Executando Semgrep (regras OWASP & Secrets)...",
+    gemini: "IA contextualizando riscos e correções...",
+    done: "Auditoria finalizada com sucesso!",
+  }
+
   return (
-    <Card className="p-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/30">
-          <FolderGit2 className="h-5 w-5 text-primary" aria-hidden="true" />
-        </div>
-        <div>
-          <h2 className="font-heading text-base font-semibold text-foreground">
-            Conectar repositório
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Conecte o GitHub para iniciar uma varredura de segurança real
-          </p>
-        </div>
+    <div className="saas-card p-6 space-y-6">
+      <div>
+        <h2 className="font-heading text-sm font-bold uppercase tracking-wider text-foreground">
+          {t.connections.formTitle}
+        </h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {t.connections.formSub}
+        </p>
       </div>
 
-      <div className="mt-6 space-y-5">
-        {/* Token */}
-        <div className="space-y-2">
-          <Label htmlFor="token" className="flex items-center gap-2 text-sm">
-            <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-            Token do GitHub
-          </Label>
-          <Input
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Token Input */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <KeyRound className="h-3.5 w-3.5 text-primary" />
+            {t.connections.tokenLabel}
+          </label>
+          <input
             id="token"
             type="password"
             placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
             value={token}
-            onChange={(e) => setToken(e.target.value)}
             disabled={scanning}
-            className="font-mono"
+            onChange={(e) => setToken(e.target.value)}
+            className="w-full border border-border bg-background px-3.5 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
           />
           <p className="text-[11px] text-muted-foreground">
-            Use um token com permissão <code className="rounded bg-muted px-1 py-0.5">repo:read</code> (somente leitura)
+            {t.connections.tokenHint}
           </p>
         </div>
 
-        {/* Repo URL */}
-        <div className="space-y-2">
-          <Label htmlFor="repo" className="flex items-center gap-2 text-sm">
-            <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-            URL do Repositório
-          </Label>
-          <Input
+        {/* Repo Input */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+            <Link2 className="h-3.5 w-3.5 text-primary" />
+            {t.connections.repoLabel}
+          </label>
+          <input
             id="repo"
-            type="url"
-            placeholder="https://github.com/org/projeto"
+            type="text"
+            placeholder="https://github.com/usuario/repositorio"
             value={repo}
-            onChange={(e) => setRepo(e.target.value)}
             disabled={scanning}
+            onChange={(e) => setRepo(e.target.value)}
+            onBlur={(e) => setRepo(normalizeRepoInput(e.target.value))}
+            className="w-full border border-border bg-background px-3.5 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
           />
         </div>
 
-        {/* Error banner */}
+        {/* Error notice */}
         {error && (
-          <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span className="flex-1">{error}</span>
-            <button onClick={() => setError(null)} className="shrink-0 opacity-70 hover:opacity-100">
-              <X className="h-4 w-4" />
+          <div className="flex items-start gap-2.5 border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-400">
+            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-rose-400">{t.connections.errorTitle}</p>
+              <p className="mt-0.5 opacity-90">{error}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-rose-400 hover:text-rose-300"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Progress bar during scan */}
+        {scanning && (
+          <div className="space-y-2 bg-muted/40 p-4 border border-border">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-mono text-primary font-medium">{stages[stage]}</span>
+              <span className="font-mono text-muted-foreground font-semibold">{Math.round(progress)}%</span>
+            </div>
+            <div className="h-1.5 w-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Done summary banner */}
+        {done && resultSummary && (
+          <div className="border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs">
+            <div className="flex items-center gap-2 font-bold text-emerald-500 mb-2">
+              <CheckCircle2 className="h-4 w-4" />
+              {t.connections.doneTitle.replace("{sec}", String(resultSummary.tempo))}
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center my-3">
+              <div className="bg-card p-2 border border-border shadow-sm">
+                <p className="font-heading text-lg font-bold text-foreground">{resultSummary.total}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">{t.devops.total}</p>
+              </div>
+              <div className="bg-card p-2 border border-border shadow-sm">
+                <p className="font-heading text-lg font-bold text-rose-500">{resultSummary.criticas}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">{t.scan.critical}</p>
+              </div>
+              <div className="bg-card p-2 border border-border shadow-sm">
+                <p className="font-heading text-lg font-bold text-amber-500">{resultSummary.altas}</p>
+                <p className="text-[10px] text-muted-foreground uppercase">{t.scan.high}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push("/zettascan")}
+              className="btn-electric w-full py-2 text-xs font-bold uppercase tracking-wider"
+            >
+              {t.connections.viewDetailedBtn}
+              <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
 
         {/* Action button */}
-        <div className="flex gap-2">
-          <Button
-            onClick={startScan}
-            disabled={scanning}
-            className="flex-1 gap-2 bg-primary font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            {scanning ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Varredura em andamento...
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4" />
-                Iniciar Scan
-              </>
-            )}
-          </Button>
-          {scanning && (
-            <Button
-              variant="outline"
-              onClick={cancelScan}
-              className="shrink-0 gap-1.5"
-            >
-              <X className="h-4 w-4" /> Cancelar
-            </Button>
+        <button
+          id="btn-start-scan"
+          type="submit"
+          disabled={scanning}
+          className="btn-electric w-full py-2.5 text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+        >
+          {scanning ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              {t.connections.runningAuditBtn}
+            </>
+          ) : (
+            <>
+              <GitBranch className="h-4 w-4" />
+              {t.connections.startAuditBtn}
+            </>
           )}
+        </button>
+      </form>
+
+      {/* Demo Repos Quick Links */}
+      <div className="border-t border-border pt-4">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+          {t.connections.demoTitle}
+        </p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {DEMO_REPOS.map((d) => (
+            <button
+              key={d.name}
+              type="button"
+              onClick={() => handleDemoSelect(d.url)}
+              className="text-left p-2.5 border border-border bg-card hover:border-primary/50 transition-all"
+            >
+              <p className="font-mono text-xs font-bold text-foreground truncate">{d.name}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{d.desc}</p>
+            </button>
+          ))}
         </div>
-
-        {/* Progress block */}
-        {(scanning || done) && (
-          <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span
-                className={cn(
-                  "flex items-center gap-2",
-                  done ? "text-primary" : "text-foreground"
-                )}
-              >
-                {done ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Varredura concluída
-                  </>
-                ) : (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                    {stages[stage]}
-                  </>
-                )}
-              </span>
-              <span className="font-mono text-xs text-muted-foreground">
-                {Math.round(progress)}%
-              </span>
-            </div>
-
-            <Progress value={progress} className="h-2" />
-
-            {scanning && (
-              <p className="text-[11px] text-muted-foreground">
-                A varredura pode levar de 1 a 5 minutos dependendo do tamanho do repositório.
-              </p>
-            )}
-
-            {done && resultSummary && (
-              <div className="space-y-2">
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-md bg-background/60 p-2">
-                    <p className="font-heading text-lg font-bold text-foreground">
-                      {resultSummary.total}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Total
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-background/60 p-2">
-                    <p className="font-heading text-lg font-bold text-destructive">
-                      {resultSummary.criticas}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Críticas
-                    </p>
-                  </div>
-                  <div className="rounded-md bg-background/60 p-2">
-                    <p className="font-heading text-lg font-bold text-chart-4">
-                      {resultSummary.altas}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Altas
-                    </p>
-                  </div>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Tempo de análise: <span className="font-medium">{resultSummary.tempo}s</span>
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full gap-2 text-primary"
-                  onClick={() => router.push("/zettascan")}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Ver vulnerabilidades em ZettaScan
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
-    </Card>
+    </div>
   )
 }

@@ -1,30 +1,31 @@
 "use client"
 
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { Card } from "@/components/ui/card"
+import { useEffect, useState, useCallback } from "react"
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import {
+  loadConsolidatedScanResult,
+  getActiveRepoUrl,
+  getSavedRepositories,
+} from "@/lib/zettascan-api"
+import { useLanguage } from "@/lib/language-provider"
+import { BarChart2, ArrowRight } from "lucide-react"
+import Link from "next/link"
 
-const data = [
-  { t: "00h", ameacas: 120, alertas: 12 },
-  { t: "03h", ameacas: 98, alertas: 8 },
-  { t: "06h", ameacas: 160, alertas: 18 },
-  { t: "09h", ameacas: 240, alertas: 22 },
-  { t: "12h", ameacas: 320, alertas: 34 },
-  { t: "15h", ameacas: 280, alertas: 27 },
-  { t: "18h", ameacas: 410, alertas: 41 },
-  { t: "21h", ameacas: 360, alertas: 30 },
-  { t: "24h", ameacas: 300, alertas: 24 },
-]
+interface ChartData {
+  label: string
+  count: number
+  fill: string
+}
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg">
-      <p className="mb-1 font-medium text-foreground">{label}</p>
+    <div className="border border-border bg-card px-3 py-2 text-xs shadow-xl text-card-foreground">
+      <p className="mb-1 font-bold text-foreground uppercase">{label}</p>
       {payload.map((p: any) => (
         <p key={p.dataKey} className="flex items-center gap-2 text-muted-foreground">
-          <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
-          {p.dataKey === "ameacas" ? "Ameaças" : "Alertas"}:{" "}
-          <span className="font-medium text-foreground">{p.value}</span>
+          <span className="h-2 w-2" style={{ background: p.fill }} />
+          <span className="font-bold text-foreground">{p.value}</span> findings
         </p>
       ))}
     </div>
@@ -32,57 +33,115 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export function EventsTimeline() {
+  const { t } = useLanguage()
+  const [data, setData] = useState<ChartData[] | null>(null)
+  const [scopeLabel, setScopeLabel] = useState("")
+
+  const refresh = useCallback(() => {
+    const activeUrl = getActiveRepoUrl()
+    const result = loadConsolidatedScanResult(activeUrl)
+    const allRepos = getSavedRepositories()
+
+    if (!result) {
+      setData(null)
+      return
+    }
+
+    if (!activeUrl && allRepos.length > 1) {
+      setScopeLabel(`${t.repoSelector.consolidated} — ${allRepos.length} ${t.repoSelector.connectedRepos}`)
+    } else {
+      setScopeLabel(`${t.repoSelector.label} ${result.repositorio.split("/").pop() ?? result.repositorio}`)
+    }
+
+    setData([
+      { label: t.scan.critical, count: result.criticas, fill: "#f43f5e" },
+      { label: t.scan.high,     count: result.altas,    fill: "#f59e0b" },
+      { label: t.scan.medium,   count: result.medias,   fill: "#818cf8" },
+      { label: t.scan.low,      count: result.baixas,   fill: "#00e5ff" },
+    ])
+  }, [t])
+
+  useEffect(() => {
+    refresh()
+    const handler = () => refresh()
+    window.addEventListener("zettascan:repo_change", handler)
+    return () => window.removeEventListener("zettascan:repo_change", handler)
+  }, [refresh])
+
   return (
-    <Card className="p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="saas-card p-5 space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-heading text-base font-semibold text-foreground">Linha do tempo de eventos</h2>
-          <p className="text-xs text-muted-foreground">Eventos de segurança nas últimas 24 horas</p>
+          <h2 className="font-heading text-sm font-bold uppercase tracking-wider text-foreground">
+            {t.dash.severityDistribution}
+          </h2>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {data ? scopeLabel : t.dash.waitingAuditData}
+          </p>
         </div>
-        <div className="flex items-center gap-4 text-xs">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-chart-1" /> Ameaças
-          </span>
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-chart-5" /> Alertas
-          </span>
-        </div>
+        {data && (
+          <div className="flex items-center gap-3 text-[11px]">
+            {[
+              { label: t.scan.critical, color: "bg-rose-500" },
+              { label: t.scan.high,     color: "bg-amber-500" },
+              { label: t.scan.medium,   color: "bg-indigo-500" },
+              { label: t.scan.low,      color: "bg-primary" },
+            ].map(l => (
+              <span key={l.label} className="flex items-center gap-1.5 text-muted-foreground">
+                <span className={`h-2 w-2 ${l.color}`} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="mt-4 h-72 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 8, left: -16, bottom: 0 }}>
-            <defs>
-              <linearGradient id="gAmeacas" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.4} />
-                <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="gAlertas" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--chart-5)" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="var(--chart-5)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="t" stroke="var(--muted-foreground)" tickLine={false} axisLine={false} fontSize={12} />
-            <YAxis stroke="var(--muted-foreground)" tickLine={false} axisLine={false} fontSize={12} />
-            <Tooltip content={<CustomTooltip />} />
-            <Area
-              type="monotone"
-              dataKey="ameacas"
-              stroke="var(--chart-1)"
-              strokeWidth={2}
-              fill="url(#gAmeacas)"
-            />
-            <Area
-              type="monotone"
-              dataKey="alertas"
-              stroke="var(--chart-5)"
-              strokeWidth={2}
-              fill="url(#gAlertas)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </Card>
+      {!data ? (
+        <div className="flex h-60 flex-col items-center justify-center gap-2 border border-dashed border-border bg-muted/20">
+          <BarChart2 className="h-8 w-8 text-muted-foreground/30" />
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground">{t.dash.waitingAuditData}</p>
+            <Link
+              href="/configuracoes"
+              className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold"
+            >
+              {t.dash.connectRepo} <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="h-60 w-full pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }} barSize={44}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" vertical={false} />
+              <XAxis
+                dataKey="label"
+                stroke="#64748b"
+                tickLine={false}
+                axisLine={false}
+                fontSize={11}
+              />
+              <YAxis
+                stroke="#64748b"
+                tickLine={false}
+                axisLine={false}
+                fontSize={11}
+                allowDecimals={false}
+              />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255, 255, 255, 0.03)" }} />
+              <Bar
+                dataKey="count"
+                isAnimationActive={true}
+                animationDuration={600}
+              >
+                {data!.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
   )
 }
