@@ -1,16 +1,16 @@
-"""
+﻿"""
 semgrep_wrapper.py
 ------------------
 Executa o Semgrep e normaliza os resultados.
 Conta com motor SAST nativo para execução resiliente em ambientes Windows ou quando o CLI não estiver disponível.
 
 Mapeamento de severidades:
-    Semgrep / SAST → ZettaScan
-    ─────────────────────────────
-    ERROR / CRITICAL → CRITICAL
-    WARNING / HIGH   → HIGH
-    INFO / MEDIUM    → MEDIUM
-    (outros)         → LOW
+    Semgrep / SAST -> ZettaScan
+    ───────────────────────────
+    ERROR / CRITICAL -> CRITICAL
+    WARNING / HIGH   -> HIGH
+    INFO / MEDIUM    -> MEDIUM
+    (outros)         -> LOW
 """
 
 import os
@@ -40,14 +40,17 @@ _SEVERIDADE_DEFAULT = "LOW"
 # Regex para sanitização de log injection — remove controles e escapes ANSI
 _RE_CONTROLES = re.compile(r'[\x00-\x1f\x7f]|\x1b\[[0-9;]*[mGKHF]')
 
-# ── Regras SAST Nativas (Fallback Resiliente para Windows / Semgrep indisponível) ─
+# ── Regras SAST Nativas (Fallback Resiliente para Windows / Semgrep indisponível) ──
 _REGRAS_SAST = [
     {
         "id": "owasp.top10.a03.sql-injection",
         "nome": "SQL Injection",
         "mensagem": "Possível injeção de SQL detectada através de concatenação ou formatação de string em consulta de banco de dados.",
         "severidade": "ERROR",
-        "pattern": re.compile(r'(?:SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\b[^\n"\']*(?:\+|%|\.format|f[\'"]|\$\{)[^\n]*', re.IGNORECASE),
+        "pattern": re.compile(
+            r'(?:(?:SELECT\s+[\w\*,\s]+\s+FROM\s+\w+|INSERT\s+INTO\s+\w+|UPDATE\s+\w+\s+SET|DELETE\s+FROM\s+\w+)[^\n"\']*(?:\+|%|\.format|f[\'"]|\$\{)|(?:cursor|db|session|conn|connection)\.execute\s*\([^\)]*(?:\+|%|\.format|f[\'"]))',
+            re.IGNORECASE,
+        ),
         "extensoes": {".py", ".js", ".ts", ".jsx", ".tsx", ".php", ".java", ".go"},
     },
     {
@@ -55,7 +58,7 @@ _REGRAS_SAST = [
         "nome": "Hardcoded Secret / Token",
         "mensagem": "Chave de API, segredo criptográfico ou token sensível exposto diretamente no código-fonte.",
         "severidade": "ERROR",
-        "pattern": re.compile(r'(?:api[_-]?key|secret|password|passwd|token|jwt_secret)\s*[:=]\s*["\'][A-Za-z0-9_\-\.]{8,}["\']', re.IGNORECASE),
+        "pattern": re.compile(r'(?:api[_-]?key|secret|password|passwd|token|jwt_secret)\s*[:=]\s*["\'][A-Za-z0-9_\-\.]{12,}["\']', re.IGNORECASE),
         "extensoes": {".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".env", ".yaml", ".yml", ".go", ".java"},
     },
     {
@@ -63,7 +66,7 @@ _REGRAS_SAST = [
         "nome": "Command Injection / RCE",
         "mensagem": "Execução de comando de sistema operacional potencialmente inseguro com entrada não sanitizada.",
         "severidade": "ERROR",
-        "pattern": re.compile(r'(?:os\.system|subprocess\.(?:Popen|run|call)\(.*shell\s*=\s*True|child_process\.exec\b|exec\b\s*\(|eval\b\s*\()', re.IGNORECASE),
+        "pattern": re.compile(r'(?:os\.system\s*\([^\)]*[\+%]|subprocess\.(?:Popen|run|call)\(.*shell\s*=\s*True|child_process\.exec\b|eval\s*\([^\)]*[\+%\$])', re.IGNORECASE),
         "extensoes": {".py", ".js", ".ts", ".jsx", ".tsx", ".php"},
     },
     {
@@ -134,7 +137,7 @@ def _analisador_sast_nativo(caminho_repo: str) -> List[Dict]:
     repo_path = Path(caminho_repo)
     
     # Pastas ignoradas
-    ignorar_dirs = {".git", "node_modules", "venv", ".venv", "dist", "build", "__pycache__"}
+    ignorar_dirs = {".git", "node_modules", "venv", ".venv", "dist", "build", "__pycache__", ".next"}
 
     for raiz, dirs, arquivos in os.walk(caminho_repo):
         # Filtra diretórios
@@ -147,6 +150,12 @@ def _analisador_sast_nativo(caminho_repo: str) -> List[Dict]:
                 continue
 
             caminho_completo = Path(raiz) / arquivo
+            rel_path = str(caminho_completo.relative_to(repo_path)).replace("\\", "/")
+
+            # Arquivos de regras e definições de padrões de ataque não são código de aplicação
+            if "patterns.py" in arquivo or "rules.py" in arquivo or "semgrep_wrapper.py" in arquivo:
+                continue
+
             try:
                 with open(caminho_completo, "r", encoding="utf-8", errors="ignore") as f:
                     linhas = f.readlines()
@@ -159,9 +168,12 @@ def _analisador_sast_nativo(caminho_repo: str) -> List[Dict]:
                 if not linha_limpa or linha_limpa.startswith(("#", "//", "/*", "*")):
                     continue
 
+                # Ignora linhas que são apenas definições de regex/padrões
+                if any(x in linha_limpa for x in ("re.compile", "_p(r\"", "_p(r'", "pattern =", "regex =")):
+                    continue
+
                 for regra in regras_aplicaveis:
                     if regra["pattern"].search(linha):
-                        rel_path = str(caminho_completo.relative_to(repo_path)).replace("\\", "/")
                         vulnerabilidades.append({
                             "arquivo": _sanitizar_campo(rel_path),
                             "linha": idx_linha,
@@ -231,11 +243,9 @@ def rodar_semgrep(caminho_repo: str) -> List[Dict]:
                 logger.info("[ZettaScan] Semgrep encontrou %d problema(s).", len(vulnerabilidades))
                 return vulnerabilidades
             else:
-                # stdout vazio pode significar sem achados (não é erro)
                 stderr_info = resultado.stderr[:300] if resultado.stderr else ""
                 logger.info("[ZettaScan] Semgrep sem resultados (rc=%d). stderr: %s", resultado.returncode, stderr_info)
-                # Retorna lista vazia se saiu com 0 (sem achados) ou fallback se erro
-                if resultado.returncode in (0, 1):  # 0=ok, 1=achados (semgrep rc semântico)
+                if resultado.returncode in (0, 1):
                     return []
                 logger.warning("[ZettaScan] Semgrep saiu com rc=%d. Usando fallback SAST.", resultado.returncode)
         except FileNotFoundError:

@@ -19,12 +19,12 @@ jobs:
 
     steps:
       - name: "Checkout do Repositório"
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           fetch-depth: 0
 
       - name: "Configurar Python 3.12"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
         with:
           python-version: "3.12"
           cache: "pip"
@@ -40,7 +40,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: "gemini-3.6-flash"
         run: |
-          mkdir -p .zetta_output
+          mkdir -p zetta_output
           echo "🔍 Iniciando Auditoria Completa do Zetta Guard..."
           
           python -c "
@@ -49,7 +49,7 @@ jobs:
           try:
               from scanner import executar_scan_sync
               resultado = executar_scan_sync('.')
-              with open('.zetta_output/report.json', 'w', encoding='utf-8') as f:
+              with open('zetta_output/report.json', 'w', encoding='utf-8') as f:
                   json.dump(resultado, f, indent=2, ensure_ascii=False)
               print('✅ Scan Zetta ASPM concluído com sucesso!')
           except Exception as e:
@@ -65,7 +65,7 @@ jobs:
           sys.path.insert(0, os.path.abspath('zettascan'))
           from quality_gate import avaliar_quality_gate
           
-          with open('.zetta_output/report.json', 'r', encoding='utf-8') as f:
+          with open('zetta_output/report.json', 'r', encoding='utf-8') as f:
               scan = json.load(f)
           
           qg = avaliar_quality_gate(
@@ -73,7 +73,7 @@ jobs:
               policy={'max_critical': 0, 'max_high': 2, 'block_on_secrets': True}
           )
           
-          with open('.zetta_output/quality_gate.json', 'w', encoding='utf-8') as f:
+          with open('zetta_output/quality_gate.json', 'w', encoding='utf-8') as f:
               json.dump(qg, f, indent=2, ensure_ascii=False)
           
           # Escrever no GitHub Step Summary
@@ -103,13 +103,13 @@ jobs:
       - name: "Comentar no Pull Request (Zetta Bot)"
         if: always() && github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            if (!fs.existsSync('.zetta_output/quality_gate.json')) return;
-            const qg = JSON.parse(fs.readFileSync('.zetta_output/quality_gate.json', 'utf8'));
+            if (!fs.existsSync('zetta_output/quality_gate.json')) return;
+            const qg = JSON.parse(fs.readFileSync('zetta_output/quality_gate.json', 'utf8'));
             
             const isPassed = qg.passed;
             const title = isPassed 
@@ -138,8 +138,8 @@ jobs:
 
       - name: "Salvar Relatório de Auditoria ASPM (Artifact)"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
         with:
           name: zetta-aspm-report
-          path: .zetta_output/
+          path: zetta_output/
           retention-days: 14

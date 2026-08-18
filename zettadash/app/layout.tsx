@@ -1,4 +1,4 @@
-import { Analytics } from '@vercel/analytics/next'
+﻿import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { DashboardShell } from '@/components/dashboard-shell'
@@ -52,20 +52,6 @@ export default function RootLayout({
       data-color="cyan"
       suppressHydrationWarning
     >
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                const m = localStorage.getItem('zetta-theme-mode') || 'dark';
-                const c = localStorage.getItem('zetta-theme-color') || 'cyan';
-                document.documentElement.className = m + ' ${geistSans.variable} ${geistMono.variable}';
-                document.documentElement.setAttribute('data-color', c);
-              } catch(e){}
-            `,
-          }}
-        />
-      </head>
       <body className="font-sans antialiased bg-background text-foreground">
         <LanguageProvider>
           <ThemeProvider>
