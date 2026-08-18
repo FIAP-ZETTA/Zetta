@@ -1,4 +1,4 @@
-name: "Zetta Guard — ASPM Security Quality Gate"
+﻿name: "Zetta Guard — ASPM Security Quality Gate"
 
 on:
   push:
@@ -38,6 +38,7 @@ jobs:
         id: zetta_scan
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: "gemini-3.6-flash"
         run: |
           mkdir -p .zetta_output
           echo "🔍 Iniciando Auditoria Completa do Zetta Guard..."
@@ -46,8 +47,8 @@ jobs:
           import sys, os, json
           sys.path.insert(0, os.path.abspath('zettascan'))
           try:
-              from scanner import executar_scan
-              resultado = executar_scan('.')
+              from scanner import executar_scan_sync
+              resultado = executar_scan_sync('.')
               with open('.zetta_output/report.json', 'w', encoding='utf-8') as f:
                   json.dump(resultado, f, indent=2, ensure_ascii=False)
               print('✅ Scan Zetta ASPM concluído com sucesso!')
@@ -101,6 +102,7 @@ jobs:
 
       - name: "Comentar no Pull Request (Zetta Bot)"
         if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
