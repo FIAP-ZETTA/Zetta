@@ -1,4 +1,4 @@
-version: '3.8'
+﻿version: '3.8'
 
 networks:
   zetta_net:
@@ -6,7 +6,7 @@ networks:
 
 services:
 
-  # ── ZettaScan — Motor de análise de código e dependências ──────────────────
+  # ── ZettaScan — Motor de análise de código e dependências ───────────────────
   zettascan:
     build:
       context: ../zettascan
@@ -19,6 +19,7 @@ services:
     env_file: ../.env
     environment:
       PYTHONUNBUFFERED: "1"
+      GEMINI_MODEL: "gemini-3.6-flash"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -26,7 +27,7 @@ services:
       start_period: 20s
       retries: 3
 
-  # ── ZettaGuard — Firewall e Proteção de IA / LLMs ─────────────────────────
+  # ── ZettaGuard — Firewall e Proteção de IA / LLMs ───────────────────────────
   zettaguard:
     build:
       context: ../zettaguard
@@ -39,6 +40,7 @@ services:
     env_file: ../.env
     environment:
       PYTHONUNBUFFERED: "1"
+      GEMINI_MODEL: "gemini-3.6-flash"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 30s
@@ -46,14 +48,14 @@ services:
       start_period: 20s
       retries: 3
 
-  # ── ZettaDash — Frontend Dashboard Central ─────────────────────────────────
+  # ── ZettaDash — Frontend Dashboard Central ──────────────────────────────────
   zettadash:
     build:
       context: ../zettadash
       dockerfile: ../DevOPS/Dockerfile.zettadash
       args:
-        NEXT_PUBLIC_ZETTASCAN_URL: http://zettascan:8000
-        NEXT_PUBLIC_ZETTAGUARD_URL: http://zettaguard:8002
+        NEXT_PUBLIC_ZETTASCAN_URL: http://localhost:8000
+        NEXT_PUBLIC_ZETTAGUARD_URL: http://localhost:8002
     restart: unless-stopped
     networks:
       - zetta_net
@@ -66,8 +68,10 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_ZETTASCAN_URL: http://zettascan:8000
-      NEXT_PUBLIC_ZETTAGUARD_URL: http://zettaguard:8002
+      NEXT_PUBLIC_ZETTASCAN_URL: http://localhost:8000
+      NEXT_PUBLIC_ZETTAGUARD_URL: http://localhost:8002
+      ZETTASCAN_INTERNAL_URL: http://zettascan:8000
+      ZETTAGUARD_INTERNAL_URL: http://zettaguard:8002
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s

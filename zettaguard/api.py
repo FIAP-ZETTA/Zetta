@@ -1,20 +1,20 @@
-"""
+﻿"""
 api.py
 ------
-API FastAPI do ZettaGuard — proxy/middleware de proteção LLM.
+API FastAPI do ZettaGuard â€” proxy/middleware de proteÃ§Ã£o LLM.
 
 Endpoints:
-  POST /analyze          → analisa um prompt de entrada
-  POST /analyze-output   → analisa a saída de um LLM
-  POST /proxy            → pipeline completo (entrada → LLM → saída)
-  GET  /events           → histórico de eventos de segurança
-  GET  /stats            → estatísticas agregadas
-  GET  /health           → health check
+  POST /analyze          â†’ analisa um prompt de entrada
+  POST /analyze-output   â†’ analisa a saÃ­da de um LLM
+  POST /proxy            â†’ pipeline completo (entrada â†’ LLM â†’ saÃ­da)
+  GET  /events           â†’ histÃ³rico de eventos de seguranÃ§a
+  GET  /stats            â†’ estatÃ­sticas agregadas
+  GET  /health           â†’ health check
 
 Para rodar:
     uvicorn api:app --reload --port 8002
 
-Documentação interativa:
+DocumentaÃ§Ã£o interativa:
     http://localhost:8002/docs
 """
 
@@ -22,7 +22,8 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(usecwd=True))
 
 # pyrefly: ignore [missing-import]
 from fastapi import FastAPI, HTTPException, Query
@@ -39,18 +40,18 @@ from patterns import ALL_INPUT_PATTERNS, ALL_OUTPUT_PATTERNS, CATEGORY_LABELS, S
 
 load_dotenv()
 
-# ── Logging ────────────────────────────────────────────────────────────────────
+# â”€â”€ Logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    format="%(asctime)s %(levelname)s %(name)s â€” %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ── Aplicação ──────────────────────────────────────────────────────────────────
+# â”€â”€ AplicaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app = FastAPI(
     title="ZettaGuard API",
     description=(
-        "Camada de proteção LLM do Zetta Guard. "
+        "Camada de proteÃ§Ã£o LLM do Zetta Guard. "
         "Detecta e bloqueia prompt injection, jailbreak e data exfiltration em tempo real."
     ),
     version="1.0.0",
@@ -58,34 +59,34 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# ── CORS ───────────────────────────────────────────────────────────────────────
+# â”€â”€ CORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],           # TODO: restringir ao domínio do ZettaDash em produção
+    allow_origins=["*"],           # TODO: restringir ao domÃ­nio do ZettaDash em produÃ§Ã£o
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ── Schemas ────────────────────────────────────────────────────────────────────
+# â”€â”€ Schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class AnalyzeRequest(BaseModel):
     """Corpo do POST /analyze."""
     prompt: str = Field(..., min_length=1, max_length=10000, description="Prompt a ser analisado")
     context: Optional[str] = Field(None, description="Contexto adicional (sistema ou documentos)")
-    log_event: bool = Field(True, description="Se deve registrar o evento no histórico")
+    log_event: bool = Field(True, description="Se deve registrar o evento no histÃ³rico")
 
 
 class AnalyzeOutputRequest(BaseModel):
     """Corpo do POST /analyze-output."""
     response: str = Field(..., min_length=1, max_length=50000, description="Resposta do LLM a analisar")
     original_prompt: Optional[str] = Field(None, description="Prompt original que gerou a resposta")
-    log_event: bool = Field(True, description="Se deve registrar o evento no histórico")
+    log_event: bool = Field(True, description="Se deve registrar o evento no histÃ³rico")
 
 
 class ProxyRequest(BaseModel):
-    """Corpo do POST /proxy — pipeline completo."""
-    prompt: str = Field(..., min_length=1, max_length=10000, description="Prompt do usuário")
+    """Corpo do POST /proxy â€” pipeline completo."""
+    prompt: str = Field(..., min_length=1, max_length=10000, description="Prompt do usuÃ¡rio")
     system_prompt: Optional[str] = Field(None, description="System prompt a ser protegido")
     model: str = Field("gemini-2.0-flash", description="Modelo LLM a usar")
     temperature: float = Field(0.7, ge=0.0, le=2.0)
@@ -124,11 +125,11 @@ class ErrorResponse(BaseModel):
     mensagem: str
 
 
-# ── Handler global de erros ────────────────────────────────────────────────────
+# â”€â”€ Handler global de erros â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.exception_handler(Exception)
 async def handler_erro_generico(request, exc: Exception):
-    logger.error("Erro não tratado em %s: %s", request.url, exc)
+    logger.error("Erro nÃ£o tratado em %s: %s", request.url, exc)
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
@@ -138,15 +139,15 @@ async def handler_erro_generico(request, exc: Exception):
     )
 
 
-# ── Endpoints ──────────────────────────────────────────────────────────────────
+# â”€â”€ Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.post(
     "/analyze",
     response_model=AnalyzeResponse,
     summary="Analisa um prompt de entrada",
     description=(
-        "Executa as 3 camadas de detecção (regex + IA + score) sobre o prompt. "
-        "Retorna o score de risco, categoria do ataque detectado e a decisão."
+        "Executa as 3 camadas de detecÃ§Ã£o (regex + IA + score) sobre o prompt. "
+        "Retorna o score de risco, categoria do ataque detectado e a decisÃ£o."
     ),
 )
 async def analyze(body: AnalyzeRequest):
@@ -178,9 +179,9 @@ async def analyze(body: AnalyzeRequest):
 
 @app.post(
     "/analyze-output",
-    summary="Analisa a saída de um LLM",
+    summary="Analisa a saÃ­da de um LLM",
     description=(
-        "Verifica se a resposta do modelo contém dados sensíveis (PII, "
+        "Verifica se a resposta do modelo contÃ©m dados sensÃ­veis (PII, "
         "credenciais, system prompt, etc.)."
     ),
 )
@@ -207,17 +208,17 @@ async def analyze_output_endpoint(body: AnalyzeOutputRequest):
 @app.post(
     "/proxy",
     response_model=ProxyResponse,
-    summary="Pipeline completo: entrada → LLM → saída",
+    summary="Pipeline completo: entrada â†’ LLM â†’ saÃ­da",
     description=(
         "Intercepta a chamada ao LLM, analisa a entrada, chama o modelo se permitido, "
-        "e analisa a saída antes de retornar ao cliente."
+        "e analisa a saÃ­da antes de retornar ao cliente."
     ),
 )
 async def proxy(body: ProxyRequest):
-    """Pipeline completo de proteção LLM."""
+    """Pipeline completo de proteÃ§Ã£o LLM."""
     logger.info("[/proxy] Proxy request para modelo %s", body.model)
 
-    # ── Análise de entrada ──────────────────────────────────────────────────────
+    # â”€â”€ AnÃ¡lise de entrada â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     full_input = body.prompt
     if body.system_prompt:
         full_input = f"[SYSTEM]: {body.system_prompt}\n\n[USER]: {body.prompt}"
@@ -235,7 +236,7 @@ async def proxy(body: ProxyRequest):
         ai_classification=input_result.ai_classification,
     )
 
-    # Se bloqueado, não chama o LLM
+    # Se bloqueado, nÃ£o chama o LLM
     if input_result.decision == "Bloqueado":
         return ProxyResponse(
             allowed=False,
@@ -245,7 +246,7 @@ async def proxy(body: ProxyRequest):
             blocked_reason=input_result.explanation,
         )
 
-    # ── Chama o LLM ────────────────────────────────────────────────────────────
+    # â”€â”€ Chama o LLM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     llm_response_text = await _call_llm(
         prompt=body.prompt,
         system_prompt=body.system_prompt,
@@ -260,7 +261,7 @@ async def proxy(body: ProxyRequest):
             detail="Falha ao chamar o modelo LLM. Verifique as credenciais e tente novamente.",
         )
 
-    # ── Análise de saída ────────────────────────────────────────────────────────
+    # â”€â”€ AnÃ¡lise de saÃ­da â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     output_result = analyze_output(llm_response_text)
 
     if output_result.score > 0:
@@ -274,7 +275,7 @@ async def proxy(body: ProxyRequest):
             matched_patterns=output_result.matched_patterns,
         )
 
-    # Se a saída vaza dados, bloqueia
+    # Se a saÃ­da vaza dados, bloqueia
     if output_result.decision == "Bloqueado":
         return ProxyResponse(
             allowed=False,
@@ -295,7 +296,7 @@ async def proxy(body: ProxyRequest):
 
 @app.get(
     "/events",
-    summary="Histórico de eventos de segurança",
+    summary="HistÃ³rico de eventos de seguranÃ§a",
     description="Retorna os eventos registrados, com filtros opcionais.",
 )
 async def get_events(
@@ -304,7 +305,7 @@ async def get_events(
     decision: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
 ):
-    """Retorna o histórico de eventos de segurança para o ZettaDash."""
+    """Retorna o histÃ³rico de eventos de seguranÃ§a para o ZettaDash."""
     return {
         "events": event_store.get_events(
             limit=limit,
@@ -318,13 +319,13 @@ async def get_events(
 
 @app.get(
     "/stats",
-    summary="Estatísticas agregadas",
-    description="Retorna contadores e métricas de segurança para o ZettaDash.",
+    summary="EstatÃ­sticas agregadas",
+    description="Retorna contadores e mÃ©tricas de seguranÃ§a para o ZettaDash.",
 )
 async def get_stats():
-    """Retorna estatísticas agregadas dos eventos de segurança."""
+    """Retorna estatÃ­sticas agregadas dos eventos de seguranÃ§a."""
     stats = event_store.get_stats()
-    # Adiciona labels legíveis por categoria
+    # Adiciona labels legÃ­veis por categoria
     stats["category_labels"] = {
         k: CATEGORY_LABELS.get(k, k)
         for k in stats.get("by_category", {}).keys()
@@ -352,7 +353,7 @@ async def health():
     }
 
 
-# ── LLM Caller ─────────────────────────────────────────────────────────────────
+# â”€â”€ LLM Caller â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def _call_llm(
     prompt: str,
@@ -367,7 +368,7 @@ async def _call_llm(
     """
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
-        logger.error("[proxy] GEMINI_API_KEY não configurada")
+        logger.error("[proxy] GEMINI_API_KEY nÃ£o configurada")
         return None
 
     try:
@@ -391,3 +392,4 @@ async def _call_llm(
     except Exception as e:
         logger.error("[proxy] Erro ao chamar LLM: %s", e)
         return None
+

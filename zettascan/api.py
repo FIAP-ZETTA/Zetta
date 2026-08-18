@@ -1,36 +1,36 @@
-"""
+﻿"""
 api.py
 ------
-A API do ZettaScan — é o que o ZettaDash e o backend principal vão chamar.
+A API do ZettaScan â€” Ã© o que o ZettaDash e o backend principal vÃ£o chamar.
 
-Expõe endpoints:
-  POST /scan    → recebe a URL do repo e o token, retorna o relatório
-  POST /export  → recebe dados de scan e retorna JSON completo ou SBOM CycloneDX
-  GET  /health  → health check
+ExpÃµe endpoints:
+  POST /scan    â†’ recebe a URL do repo e o token, retorna o relatÃ³rio
+  POST /export  â†’ recebe dados de scan e retorna JSON completo ou SBOM CycloneDX
+  GET  /health  â†’ health check
 
 Para rodar a API:
     uvicorn api:app --reload --port 8001
 
 Para testar no navegador:
     http://localhost:8001/docs
-    (O FastAPI gera uma interface Swagger automática!)
+    (O FastAPI gera uma interface Swagger automÃ¡tica!)
 
-Correções de auditoria 2026-07-14:
-- [AP-1] Removido fallback silencioso para GITHUB_TOKEN do .env —
-          o token DEVE sempre vir da requisição do cliente
-- [AP-2] allow_credentials=False (combinação allow_origins=* + credentials
-          é inválida na spec CORS e rejeitada por browsers modernos)
-- [AP-3] Validação de URL via regex + field_validator Pydantic (não apenas startswith)
-- [AP-4] response_model=ScanResponse adicionado — FastAPI valida o retorno
+CorreÃ§Ãµes de auditoria 2026-07-14:
+- [AP-1] Removido fallback silencioso para GITHUB_TOKEN do .env â€”
+          o token DEVE sempre vir da requisiÃ§Ã£o do cliente
+- [AP-2] allow_credentials=False (combinaÃ§Ã£o allow_origins=* + credentials
+          Ã© invÃ¡lida na spec CORS e rejeitada por browsers modernos)
+- [AP-3] ValidaÃ§Ã£o de URL via regex + field_validator Pydantic (nÃ£o apenas startswith)
+- [AP-4] response_model=ScanResponse adicionado â€” FastAPI valida o retorno
 
-Adições 2026-08-17:
+AdiÃ§Ãµes 2026-08-17:
 - [AP-5] Campo `tipo` em VulnerabilidadeResponse (codigo / dependencia / iac)
 - [AP-6] Campos `iac_total` e `iac_findings` em ScanResponse
-- [AP-7] Endpoint POST /export para download de relatório JSON e SBOM CycloneDX
+- [AP-7] Endpoint POST /export para download de relatÃ³rio JSON e SBOM CycloneDX
 
-Pendências de produto documentadas:
-- [P-1] allow_origins: configurar com o domínio real do ZettaDash em produção
-- [P-2] Rate limiting: implementar ou documentar ausência (ver comentário abaixo)
+PendÃªncias de produto documentadas:
+- [P-1] allow_origins: configurar com o domÃ­nio real do ZettaDash em produÃ§Ã£o
+- [P-2] Rate limiting: implementar ou documentar ausÃªncia (ver comentÃ¡rio abaixo)
 """
 
 import logging
@@ -52,39 +52,42 @@ from scanner import executar_scan
 from dast_scanner import analisar_dast
 from attack_path import gerar_attack_paths
 from quality_gate import avaliar_quality_gate, gerar_github_action_workflow
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(usecwd=True))
+load_dotenv()
 
-# ── Logging ──────────────────────────────────────────────────────────────────
+# â”€â”€ Logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    format="%(asctime)s %(levelname)s %(name)s â€” %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ── Aplicação FastAPI ─────────────────────────────────────────────────────────
+# â”€â”€ AplicaÃ§Ã£o FastAPI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app = FastAPI(
     title="ZettaScan API",
-    description="Motor de análise de segurança do Zetta Guard — ASPM completo com SAST, SCA e IaC",
+    description="Motor de anÃ¡lise de seguranÃ§a do Zetta Guard â€” ASPM completo com SAST, SCA e IaC",
     version="2.0.0",
 )
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
-# [AP-2] allow_credentials=True + allow_origins=["*"] é inválido na spec CORS.
+# â”€â”€ CORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# [AP-2] allow_credentials=True + allow_origins=["*"] Ã© invÃ¡lido na spec CORS.
 #
-# [P-1] PENDÊNCIA DE PRODUTO: substituir allow_origins abaixo pelo domínio
-#       real do ZettaDash antes de ir para produção.
+# [P-1] PENDÃŠNCIA DE PRODUTO: substituir allow_origins abaixo pelo domÃ­nio
+#       real do ZettaDash antes de ir para produÃ§Ã£o.
 #       Ex.: allow_origins=["https://zettaguard.fiap.com.br"]
 #
-# Durante desenvolvimento acadêmico mantemos ["*"] com credentials=False,
-# que é tecnicamente válido mas inseguro em produção.
+# Durante desenvolvimento acadÃªmico mantemos ["*"] com credentials=False,
+# que Ã© tecnicamente vÃ¡lido mas inseguro em produÃ§Ã£o.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # TODO [P-1]: trocar pelo domínio do ZettaDash
-    allow_credentials=False,      # [AP-2] False é o correto com allow_origins=["*"]
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_origins=["*"],          # TODO [P-1]: trocar pelo domÃ­nio do ZettaDash
+    allow_credentials=False,      # [AP-2] False Ã© o correto com allow_origins=["*"]
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ── Schemas Pydantic ──────────────────────────────────────────────────────────
+# â”€â”€ Schemas Pydantic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 # Regex para validar URL do GitHub: https://github.com/owner/repo (com ou sem .git)
 _RE_GITHUB_URL = re.compile(
@@ -100,20 +103,20 @@ _RE_GITHUB_TOKEN = re.compile(
 
 class ScanRequest(BaseModel):
     """Corpo esperado no POST /scan."""
-    repo_url: str = Field(..., description="URL do repositório GitHub")
-    token: Optional[str] = Field(default="", description="Token GitHub read-only (opcional para repos públicos)")
+    repo_url: str = Field(..., description="URL do repositÃ³rio GitHub")
+    token: Optional[str] = Field(default="", description="Token GitHub read-only (opcional para repos pÃºblicos)")
 
-    # [AP-3] Validação de URL via regex — mais seguro que startswith
+    # [AP-3] ValidaÃ§Ã£o de URL via regex â€” mais seguro que startswith
     @field_validator("repo_url")
     @classmethod
     def validar_url(cls, v: str) -> str:
         if not _RE_GITHUB_URL.match(v):
             raise ValueError(
-                "URL inválida. Use o formato: https://github.com/owner/repo"
+                "URL invÃ¡lida. Use o formato: https://github.com/owner/repo"
             )
         return v
 
-    # [AP-3] Validação de formato do token (opcional para repositórios públicos)
+    # [AP-3] ValidaÃ§Ã£o de formato do token (opcional para repositÃ³rios pÃºblicos)
     @field_validator("token")
     @classmethod
     def validar_token(cls, v: Optional[str]) -> str:
@@ -124,32 +127,32 @@ class ScanRequest(BaseModel):
 
 
 class VulnerabilidadeResponse(BaseModel):
-    """Item individual de vulnerabilidade no relatório.
+    """Item individual de vulnerabilidade no relatÃ³rio.
 
     [3-C] AVISO PARA O TIME ZETTADASH:
-    O campo 'arquivo' contém o nome do arquivo exatamente como reportado pelo
-    Semgrep. Um repositório malicioso pode criar arquivos com nomes como
+    O campo 'arquivo' contÃ©m o nome do arquivo exatamente como reportado pelo
+    Semgrep. Um repositÃ³rio malicioso pode criar arquivos com nomes como
     '<script>alert(1)</script>.py'. O ZettaDash DEVE sempre usar textContent
-    (ou equivalente) ao renderizar esse campo — nunca innerHTML.
+    (ou equivalente) ao renderizar esse campo â€” nunca innerHTML.
     """
     titulo: str
     explicacao: str
     impacto: str
     correcao: str
-    # [7-A] Padrão explicitamente validado — garante que a soma das severidades
-    # sempre baterá com total_vulnerabilidades no ScanResponse.
+    # [7-A] PadrÃ£o explicitamente validado â€” garante que a soma das severidades
+    # sempre baterÃ¡ com total_vulnerabilidades no ScanResponse.
     severidade: str = Field(default="LOW", pattern=r"^(CRITICAL|HIGH|MEDIUM|LOW)$")
     arquivo: str = ""
     linha: Any = 0
     # [AP-5] tipo identifica a CAMADA ASPM de origem do achado:
-    #   "codigo"      → SAST (Semgrep / motor nativo)
-    #   "dependencia" → SCA (OSV.dev / CVEs em bibliotecas)
-    #   "iac"         → IaC (Dockerfile, docker-compose, CI/CD, Terraform)
+    #   "codigo"      â†’ SAST (Semgrep / motor nativo)
+    #   "dependencia" â†’ SCA (OSV.dev / CVEs em bibliotecas)
+    #   "iac"         â†’ IaC (Dockerfile, docker-compose, CI/CD, Terraform)
     tipo: str = "codigo"
 
 
 class IacFindingResponse(BaseModel):
-    """Achado bruto do IaC Scanner (antes da priorização IA)."""
+    """Achado bruto do IaC Scanner (antes da priorizaÃ§Ã£o IA)."""
     arquivo: str = ""
     linha: Any = 0
     regra: str = ""
@@ -179,18 +182,18 @@ class ScanResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """Formato padronizado de erros — consumível pelo ZettaDash."""
+    """Formato padronizado de erros â€” consumÃ­vel pelo ZettaDash."""
     status: str = "error"
     codigo: int
     mensagem: str
     detalhe: Optional[str] = None
 
 
-# ── Schemas DAST & ASPM Avançado ─────────────────────────────────────────────
+# â”€â”€ Schemas DAST & ASPM AvanÃ§ado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class DastRequest(BaseModel):
     """Corpo esperado no POST /scan-dast."""
-    target_url: str = Field(..., description="URL da aplicação em execução (ex: https://app.example.com)")
+    target_url: str = Field(..., description="URL da aplicaÃ§Ã£o em execuÃ§Ã£o (ex: https://app.example.com)")
     timeout_seconds: Optional[float] = Field(default=6.0, description="Tempo limite em segundos")
 
 
@@ -208,11 +211,11 @@ class QualityGateRequest(BaseModel):
     repo_name: Optional[str] = "app"
 
 
-# ── Schema para /export ───────────────────────────────────────────────────────
+# â”€â”€ Schema para /export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ExportRequest(BaseModel):
     """Corpo esperado no POST /export."""
-    repositorio: str = Field(..., description="URL do repositório auditado")
+    repositorio: str = Field(..., description="URL do repositÃ³rio auditado")
     vulnerabilidades: List[Dict[str, Any]] = Field(default_factory=list)
     iac_findings: List[Dict[str, Any]] = Field(default_factory=list)
     criticas: int = 0
@@ -223,52 +226,52 @@ class ExportRequest(BaseModel):
     formato: str = Field(default="json", pattern=r"^(json|sbom)$")
 
 
-# ── Handler global de erros ───────────────────────────────────────────────────
+# â”€â”€ Handler global de erros â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @app.exception_handler(Exception)
 async def handler_erro_generico(request: Request, exc: Exception):
-    logger.error("Erro não tratado em %s: %s", request.url, exc)
+    logger.error("Erro nÃ£o tratado em %s: %s", request.url, exc)
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
             codigo=500,
             mensagem="Erro interno do servidor.",
-            detalhe=None,  # não expõe detalhes internos ao cliente
+            detalhe=None,  # nÃ£o expÃµe detalhes internos ao cliente
         ).model_dump(),
     )
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# â”€â”€ Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-# [P-2] PENDÊNCIA DE PRODUTO: rate limiting não implementado.
-#       Recomenda-se slowapi (1-2 scans/min por IP) antes de produção.
+# [P-2] PENDÃŠNCIA DE PRODUTO: rate limiting nÃ£o implementado.
+#       Recomenda-se slowapi (1-2 scans/min por IP) antes de produÃ§Ã£o.
 #       Um scan pode durar 2-5 min e consumir recursos significativos.
-#       Sem rate limiting o endpoint está vulnerável a DoS acidental/intencional.
+#       Sem rate limiting o endpoint estÃ¡ vulnerÃ¡vel a DoS acidental/intencional.
 @app.post(
     "/scan",
     response_model=ScanResponse,      # [AP-4] FastAPI valida a resposta
     responses={
-        400: {"model": ErrorResponse, "description": "Parâmetros inválidos"},
+        400: {"model": ErrorResponse, "description": "ParÃ¢metros invÃ¡lidos"},
         422: {"model": ErrorResponse, "description": "URL ou token malformados"},
         500: {"model": ErrorResponse, "description": "Falha interna durante o scan"},
     },
 )
 async def iniciar_scan(request: ScanRequest):
     """
-    Inicia um scan de segurança em um repositório.
+    Inicia um scan de seguranÃ§a em um repositÃ³rio.
 
     Recebe:
-        repo_url: URL do repositório GitHub (https://github.com/owner/repo)
+        repo_url: URL do repositÃ³rio GitHub (https://github.com/owner/repo)
         token: token de acesso read-only gerado pelo cliente
 
     Retorna:
-        Relatório completo com vulnerabilidades priorizadas pelo Gemini,
-        incluindo achados SAST (código), SCA (dependências) e IaC (infraestrutura).
+        RelatÃ³rio completo com vulnerabilidades priorizadas pelo Gemini,
+        incluindo achados SAST (cÃ³digo), SCA (dependÃªncias) e IaC (infraestrutura).
 
-    Tempo estimado: 1–5 minutos dependendo do tamanho do repositório.
+    Tempo estimado: 1â€“5 minutos dependendo do tamanho do repositÃ³rio.
     """
-    # [AP-1] Usa APENAS o token da requisição — nunca usa GITHUB_TOKEN do .env
-    # (o .env é para test_scan.py, não para a API de produção)
+    # [AP-1] Usa APENAS o token da requisiÃ§Ã£o â€” nunca usa GITHUB_TOKEN do .env
+    # (o .env Ã© para test_scan.py, nÃ£o para a API de produÃ§Ã£o)
     logger.info("[API] Scan solicitado para: %s", request.repo_url)
 
     resultado = await executar_scan(request.repo_url, request.token)
@@ -276,8 +279,8 @@ async def iniciar_scan(request: ScanRequest):
     if resultado.get("status") == "error":
         mensagem = resultado.get("mensagem", "Erro desconhecido durante o scan.")
 
-        # Determina código HTTP mais apropriado baseado no tipo de erro
-        if "inválid" in mensagem.lower() or "não permitido" in mensagem.lower():
+        # Determina cÃ³digo HTTP mais apropriado baseado no tipo de erro
+        if "invÃ¡lid" in mensagem.lower() or "nÃ£o permitido" in mensagem.lower():
             status_code = 400
         elif "timeout" in mensagem.lower() or "clonar" in mensagem.lower():
             status_code = 502  # upstream failure (git clone)
@@ -298,30 +301,30 @@ async def iniciar_scan(request: ScanRequest):
 @app.post(
     "/export",
     responses={
-        200: {"description": "Relatório exportado em JSON ou SBOM CycloneDX"},
-        400: {"model": ErrorResponse, "description": "Formato inválido"},
+        200: {"description": "RelatÃ³rio exportado em JSON ou SBOM CycloneDX"},
+        400: {"model": ErrorResponse, "description": "Formato invÃ¡lido"},
     },
 )
 async def exportar_relatorio(request: ExportRequest):
     """
-    [AP-7] Endpoint de exportação de relatório de segurança.
+    [AP-7] Endpoint de exportaÃ§Ã£o de relatÃ³rio de seguranÃ§a.
 
     Suporta dois formatos:
-      - `json`: Relatório completo estruturado com todos os achados
-      - `sbom`: Software Bill of Materials no padrão CycloneDX 1.4
+      - `json`: RelatÃ³rio completo estruturado com todos os achados
+      - `sbom`: Software Bill of Materials no padrÃ£o CycloneDX 1.4
 
-    O SBOM lista todos os componentes identificados nas dependências
-    com seus CVEs conhecidos — padrão exigido por compliance (EU CRA, NIST SSDF).
+    O SBOM lista todos os componentes identificados nas dependÃªncias
+    com seus CVEs conhecidos â€” padrÃ£o exigido por compliance (EU CRA, NIST SSDF).
     """
     agora = datetime.now(timezone.utc).isoformat()
 
     if request.formato == "sbom":
-        # Gera SBOM no padrão CycloneDX 1.4
+        # Gera SBOM no padrÃ£o CycloneDX 1.4
         componentes = []
         vistos = set()
 
         for vuln in request.vulnerabilidades:
-            # Achados de dependências têm campo 'pacote' ou 'arquivo' com nome do pacote
+            # Achados de dependÃªncias tÃªm campo 'pacote' ou 'arquivo' com nome do pacote
             pacote = vuln.get("pacote", "")
             versao = vuln.get("versao", "")
             cve = vuln.get("cve_id", "")
@@ -398,14 +401,14 @@ async def exportar_relatorio(request: ExportRequest):
 @app.post(
     "/scan-dast",
     responses={
-        200: {"description": "Resultado da varredura dinâmica de segurança DAST"},
-        400: {"model": ErrorResponse, "description": "URL ou parâmetros inválidos"},
+        200: {"description": "Resultado da varredura dinÃ¢mica de seguranÃ§a DAST"},
+        400: {"model": ErrorResponse, "description": "URL ou parÃ¢metros invÃ¡lidos"},
     },
 )
 async def executar_dast(request: DastRequest):
     """
-    [DAST-1] Executa varredura dinâmica de segurança (DAST) em uma URL ativa.
-    Analisa Headers de Segurança, CORS, vazamento de versões e endpoints sensíveis.
+    [DAST-1] Executa varredura dinÃ¢mica de seguranÃ§a (DAST) em uma URL ativa.
+    Analisa Headers de SeguranÃ§a, CORS, vazamento de versÃµes e endpoints sensÃ­veis.
     """
     logger.info("Iniciando varredura DAST para URL: %s", request.target_url)
     resultado = await analisar_dast(request.target_url, request.timeout_seconds or 6.0)
@@ -420,7 +423,7 @@ async def executar_dast(request: DastRequest):
 )
 async def correlacionar_attack_paths(request: AttackPathsRequest):
     """
-    [APA-1] Motor de correlação e análise de caminhos de ataque (Attack Path Analysis).
+    [APA-1] Motor de correlaÃ§Ã£o e anÃ¡lise de caminhos de ataque (Attack Path Analysis).
     """
     paths = gerar_attack_paths(request.vulnerabilidades, request.iac_findings)
     return JSONResponse(content={"attack_paths": paths, "total": len(paths)})
@@ -429,12 +432,12 @@ async def correlacionar_attack_paths(request: AttackPathsRequest):
 @app.post(
     "/quality-gate/evaluate",
     responses={
-        200: {"description": "Resultado da avaliação do Quality Gate CI/CD"},
+        200: {"description": "Resultado da avaliaÃ§Ã£o do Quality Gate CI/CD"},
     },
 )
 async def avaliar_qg(request: QualityGateRequest):
     """
-    [QG-1] Avalia se o repositório cumpre as políticas corporativas de Quality Gate
+    [QG-1] Avalia se o repositÃ³rio cumpre as polÃ­ticas corporativas de Quality Gate
     e gera o workflow de CI/CD para GitHub Actions.
     """
     base_data = {
@@ -448,5 +451,6 @@ async def avaliar_qg(request: QualityGateRequest):
 
 @app.get("/health")
 async def health():
-    """Health check — retorna 200 se a API está no ar."""
+    """Health check â€” retorna 200 se a API estÃ¡ no ar."""
     return {"status": "ok", "servico": "ZettaScan", "version": "2.0.0"}
+

@@ -1,6 +1,5 @@
-/** @type {import('next').NextConfig} */
+﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Necessário para o Docker multi-stage (Dockerfile usa node server.js)
   output: 'standalone',
   devIndicators: false,
   typescript: {
@@ -8,6 +7,18 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/api/scan/:path*',
+        destination: `${process.env.ZETTASCAN_INTERNAL_URL || 'http://localhost:8000'}/:path*`,
+      },
+      {
+        source: '/api/guard/:path*',
+        destination: `${process.env.ZETTAGUARD_INTERNAL_URL || 'http://localhost:8002'}/:path*`,
+      },
+    ]
   },
 }
 
