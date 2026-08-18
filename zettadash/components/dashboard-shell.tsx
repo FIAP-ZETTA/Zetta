@@ -22,6 +22,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     "/zettaguard":    { title: t.header.titles.zettaguard,  sub: t.header.titles.zettaguardSub },
     "/devops":        { title: t.header.titles.devops,      sub: t.header.titles.devopsSub },
     "/configuracoes": { title: t.header.titles.connections, sub: t.header.titles.connectionsSub },
+    "/ajuda":         { title: t.header.titles.ajuda,       sub: t.header.titles.ajudaSub },
   }
 
   const meta = titles[pathname] ?? titles["/"]
@@ -68,11 +69,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           {/* Layout do Header na Home */}
           {isHome ? (
             <>
-              {/* Lado esquerdo vazio para manter o ícone perfeitamente centralizado */}
-              <div className="w-16 hidden sm:block" />
+              {/* Lado esquerdo flex-1 para garantir centralização matemática perfeita do centro */}
+              <div className="flex-1 flex items-center justify-start" />
 
               {/* Centro: Ícone vetor do ZettaGuard (anel pontilhado giratório + escudo normal) */}
-              <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center shrink-0">
                 <Link href="/" className="group relative flex h-10 w-10 items-center justify-center">
                   {/* Anel circular pontilhado girando com glow */}
                   <svg
@@ -96,8 +97,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
 
-              {/* Lado direito: Tema + Notificações + Perfil */}
-              <div className="flex items-center gap-2.5">
+              {/* Lado direito flex-1 com justify-end para manter simetria perfeita */}
+              <div className="flex-1 flex items-center justify-end gap-2.5">
                 {/* Seletor de Temas, Cores e Idioma */}
                 <ThemeSwitcher />
 

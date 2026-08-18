@@ -101,7 +101,7 @@ _RE_GITHUB_TOKEN = re.compile(
 class ScanRequest(BaseModel):
     """Corpo esperado no POST /scan."""
     repo_url: str = Field(..., description="URL do repositório GitHub")
-    token: str = Field(..., description="Token GitHub read-only gerado pelo cliente")
+    token: Optional[str] = Field(default="", description="Token GitHub read-only (opcional para repos públicos)")
 
     # [AP-3] Validação de URL via regex — mais seguro que startswith
     @field_validator("repo_url")
@@ -113,17 +113,14 @@ class ScanRequest(BaseModel):
             )
         return v
 
-    # [AP-3] Validação de formato do token
+    # [AP-3] Validação de formato do token (opcional para repositórios públicos)
     @field_validator("token")
     @classmethod
-    def validar_token(cls, v: str) -> str:
+    def validar_token(cls, v: Optional[str]) -> str:
         if not v or not v.strip():
-            raise ValueError("Token não pode ser vazio.")
-        if not _RE_GITHUB_TOKEN.match(v):
-            raise ValueError(
-                "Formato de token inválido. Use um token GitHub válido (ghp_, ghs_, etc.)"
-            )
-        return v
+            import os
+            return os.getenv("GITHUB_TOKEN", "")
+        return v.strip()
 
 
 class VulnerabilidadeResponse(BaseModel):

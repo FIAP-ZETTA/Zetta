@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, LayoutDashboard, ScanLine, ShieldCheck, Settings, Container } from "lucide-react"
+import { Home, LayoutDashboard, ScanLine, ShieldCheck, GitBranch, Container, HelpCircle } from "lucide-react"
 import { useLanguage } from "@/lib/language-provider"
 import { cn } from "@/lib/utils"
 
@@ -16,7 +16,8 @@ export function AppSidebar() {
     { href: "/zettascan",   label: t.nav.zettascan,   icon: ScanLine,        desc: t.nav.zettascanDesc },
     { href: "/zettaguard",  label: t.nav.zettaguard,  icon: ShieldCheck,     desc: t.nav.zettaguardDesc },
     { href: "/devops",      label: t.nav.devops,      icon: Container,       desc: t.nav.devopsDesc },
-    { href: "/configuracoes", label: t.nav.connections, icon: Settings,        desc: t.nav.connectionsDesc },
+    { href: "/configuracoes", label: t.nav.connections, icon: GitBranch,       desc: t.nav.connectionsDesc },
+    { href: "/ajuda",        label: t.nav.help,        icon: HelpCircle,      desc: t.nav.helpDesc },
   ]
 
   return (

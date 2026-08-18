@@ -4,15 +4,10 @@ import { useEffect, useState, useCallback } from "react"
 import {
   ShieldCheck,
   ShieldAlert,
-  Activity,
   ArrowRight,
-  Cpu,
-  Lock,
-  Layers,
-  Sparkles,
-  Zap,
   RefreshCw,
-  Sliders,
+  Layers,
+  Activity,
 } from "lucide-react"
 import { useLanguage } from "@/lib/language-provider"
 import Link from "next/link"
@@ -29,7 +24,7 @@ import { EventsTable } from "@/components/guard/events-table"
 import { cn } from "@/lib/utils"
 
 export default function ZettaGuardPage() {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [stats, setStats] = useState<GuardStats | null>(null)
   const [health, setHealth] = useState<GuardHealthStatus | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -56,190 +51,167 @@ export default function ZettaGuardPage() {
   const scoreProtecao = total > 0 ? Math.max(100 - (emAnalise * 5), 85) : 98
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
-      {/* Banner Informativo & Status da API */}
-      <div className="saas-card p-5 border-primary/40 bg-primary/[0.03] relative overflow-hidden">
+    <div className="space-y-5 max-w-6xl mx-auto pb-12">
+      {/* Header Banner */}
+      <div className="saas-card p-5 border-primary/30 relative overflow-hidden">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3.5 max-w-3xl">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/30 text-primary shadow-sm">
-              <ShieldCheck className="h-6 w-6" />
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2.5">
+              <h1 className="font-heading text-lg font-bold text-foreground tracking-tight">
+                {t.guard.bannerTitle}
+              </h1>
+              <span className="text-[10px] font-mono text-primary px-2 py-0.5 rounded border border-primary/30 bg-primary/10">
+                Layer 5 · Runtime
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="font-heading text-base font-bold text-foreground">
-                  {t.guard.bannerTitle}
-                </h2>
-                <span className="text-[10px] font-mono font-bold bg-primary/15 text-primary px-2 py-0.5 rounded border border-primary/30">
-                  ASPM Layer 5 · Runtime & LLM
-                </span>
-              </div>
-              <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-                {t.guard.bannerDesc}
-              </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t.guard.bannerDesc}
+            </p>
 
-              {/* Badges das 3 camadas */}
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="flex items-center gap-1.5 font-bold px-2 py-0.5 rounded bg-card border border-border text-foreground">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  L1: Regex Curados (~60 padrões)
-                </span>
-                <span className="flex items-center gap-1.5 font-bold px-2 py-0.5 rounded bg-card border border-border text-foreground">
-                  <span className="h-2 w-2 rounded-full bg-primary" />
-                  L2: IA Semântica (Gemini 2.0)
-                </span>
-                <span className="flex items-center gap-1.5 font-bold px-2 py-0.5 rounded bg-card border border-border text-foreground">
-                  <span className="h-2 w-2 rounded-full bg-indigo-500" />
-                  L3: Inspeção de Saída (Data Leakage)
-                </span>
-              </div>
+            {/* Camadas Minimalistas com Theme Accent */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+              <span className="px-2 py-0.5 rounded border border-border bg-card font-medium text-foreground hover:border-primary/50 transition-colors">
+                {lang === "en" ? "L1 Regex (~60 patterns)" : "L1 Regex (~60 padrões)"}
+              </span>
+              <span className="text-muted-foreground">•</span>
+              <span className="px-2 py-0.5 rounded border border-border bg-card font-medium text-foreground hover:border-primary/50 transition-colors">
+                {lang === "en" ? "L2 Semantic AI (Gemini)" : "L2 IA Semântica (Gemini)"}
+              </span>
+              <span className="text-muted-foreground">•</span>
+              <span className="px-2 py-0.5 rounded border border-border bg-card font-medium text-foreground hover:border-primary/50 transition-colors">
+                {lang === "en" ? "L3 Output Inspection" : "L3 Inspeção de Saída"}
+              </span>
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "flex items-center gap-1.5 text-xs font-mono font-bold px-2.5 py-1 rounded border",
-                  health?.status === "online"
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                    : "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                )}
-              >
-                <Activity className="h-3.5 w-3.5 animate-pulse" />
-                <span>
-                  {health?.status === "online"
-                    ? `Porta 8002 Online (${health.latency}ms)`
-                    : "Simulação Ativa (Offline)"}
-                </span>
-              </div>
-
-              <button
-                onClick={loadData}
-                disabled={refreshing}
-                className="p-1.5 rounded border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                title="Recarregar Telemetria"
-              >
-                <RefreshCw
-                  className={cn("h-4 w-4", refreshing && "animate-spin")}
-                />
-              </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <div
+              className={cn(
+                "flex items-center gap-1.5 text-xs font-mono px-2.5 py-1 rounded border",
+                health?.status === "online"
+                  ? "border-primary/30 text-primary bg-primary/10"
+                  : "border-border text-muted-foreground bg-muted/30"
+              )}
+            >
+              <Activity className={cn("h-3 w-3", health?.status === "online" && "text-primary animate-pulse")} />
+              <span>
+                {health?.status === "online"
+                  ? `Online (${health.latency}ms)`
+                  : (lang === "en" ? "Simulation Active" : "Simulação Ativa")}
+              </span>
             </div>
+
+            <button
+              onClick={loadData}
+              disabled={refreshing}
+              className="p-1.5 rounded border border-border bg-card hover:border-primary text-muted-foreground hover:text-foreground transition-colors"
+              title={lang === "en" ? "Reload" : "Recarregar"}
+            >
+              <RefreshCw
+                className={cn("h-3.5 w-3.5", refreshing && "animate-spin text-primary")}
+              />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Métricas Principais (KPIs) */}
+      {/* Métricas Principais (KPIs) com saas-card */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {/* Total Analisado */}
         <div className="saas-card p-4 sm:p-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {t.guard.attacksDetected}
-              </p>
-              <Cpu className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <p className="mt-2 font-heading text-3xl font-extrabold text-foreground font-mono">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              {t.guard.attacksDetected}
+            </p>
+            <p className="mt-1.5 font-heading text-2xl sm:text-3xl font-bold text-foreground font-mono">
               {total}
             </p>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            Prompts e respostas inspecionados
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {lang === "en" ? "Prompts inspected" : "Prompts inspecionados"}
           </p>
         </div>
 
         {/* Ataques Bloqueados */}
         <div className="saas-card p-4 sm:p-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {t.guard.blockedWaf}
-              </p>
-              <ShieldAlert className="h-4 w-4 text-rose-400" />
-            </div>
-            <p className="mt-2 font-heading text-3xl font-extrabold text-rose-400 font-mono">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              {t.guard.blockedWaf}
+            </p>
+            <p className="mt-1.5 font-heading text-2xl sm:text-3xl font-bold text-rose-400 font-mono">
               {bloqueados}
             </p>
           </div>
-          <p className="mt-1 text-[10px] text-rose-400/80 font-bold">
-            Ameaças neutralizadas em tempo real
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {lang === "en" ? "Threats neutralized" : "Ameaças neutralizadas"}
           </p>
         </div>
 
         {/* Taxa de Bloqueio */}
         <div className="saas-card p-4 sm:p-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {t.guard.mitigationRate}
-              </p>
-              <Zap className="h-4 w-4 text-primary" />
-            </div>
-            <p className="mt-2 font-heading text-3xl font-extrabold text-primary font-mono">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              {t.guard.mitigationRate}
+            </p>
+            <p className="mt-1.5 font-heading text-2xl sm:text-3xl font-bold text-primary font-mono">
               {taxaBloqueio}%
             </p>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            {emAnalise} requisições em análise manual
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {lang === "en" ? `${emAnalise} under review` : `${emAnalise} em análise manual`}
           </p>
         </div>
 
         {/* Score de Proteção */}
         <div className="saas-card p-4 sm:p-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {t.guard.protectionScore}
-              </p>
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
-            </div>
-            <p className="mt-2 font-heading text-3xl font-extrabold text-emerald-400 font-mono">
-              {scoreProtecao}/100
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              {t.guard.protectionScore}
+            </p>
+            <p className="mt-1.5 font-heading text-2xl sm:text-3xl font-bold text-emerald-400 font-mono">
+              {scoreProtecao}<span className="text-xs text-muted-foreground font-normal">/100</span>
             </p>
           </div>
-          <p className="mt-1 text-[10px] text-emerald-400 font-bold">
-            Defesa ativa de alto nível
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {lang === "en" ? "Active defense posture" : "Postura de defesa ativa"}
           </p>
         </div>
       </div>
 
-      {/* Red-Teaming Sandbox & Attack Simulator */}
+      {/* Sandbox de Testes */}
       <AttackSandbox />
 
-      {/* Charts & OWASP Threat Matrix Grid */}
+      {/* Gráfico & Matriz OWASP */}
       <div className="grid gap-4 lg:grid-cols-2">
         <AttackChart />
         <OwaspMatrix />
       </div>
 
-      {/* Security Incident Log Table */}
+      {/* Tabela de Incidentes */}
       <EventsTable />
 
-      {/* ASPM Correlation Footer */}
-      <div className="saas-card p-5 border-border bg-card/60 flex flex-wrap items-center justify-between gap-4">
+      {/* Footer ASPM com saas-card e botão com cor do tema */}
+      <div className="saas-card p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 text-xs">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-foreground">
-            <Layers className="h-5 w-5" />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-              Integração ASPM Completa: ZettaScan + ZettaGuard + ZettaDash
-            </h4>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Conectamos a análise estática de código (SAST), CVEs de dependências (SCA), IaC e proteção em runtime de IA.
-            </p>
-          </div>
+          <Layers className="h-4 w-4 text-primary" />
+          <p className="text-muted-foreground">
+            {lang === "en" ? (
+              <>Full ASPM integration with <strong className="text-foreground">ZettaScan</strong> (SAST/SCA/IaC) and <strong className="text-foreground">ZettaGuard</strong> (Runtime AI).</>
+            ) : (
+              <>Integração ASPM com <strong className="text-foreground">ZettaScan</strong> (SAST/SCA/IaC) e <strong className="text-foreground">ZettaGuard</strong> (Runtime IA).</>
+            )}
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href="/zettascan"
-            className="btn-electric px-4 py-2 text-xs font-bold flex items-center gap-1.5"
-          >
-            Auditar Código (ZettaScan) <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
+        <Link
+          href="/zettascan"
+          className="btn-electric px-3.5 py-1.5 text-xs font-bold flex items-center gap-1.5"
+        >
+          {lang === "en" ? "Code Audit" : "Auditoria de Código"} <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
     </div>
   )
 }
+
+

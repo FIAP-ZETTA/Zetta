@@ -32,7 +32,7 @@ interface ServiceStatus {
 }
 
 export default function DevOpsPage() {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [lastCheck, setLastCheck] = useState<Date | null>(null)
   const [checking, setChecking] = useState(false)
 
@@ -81,7 +81,7 @@ export default function DevOpsPage() {
             detail:
               scanResult.status === "online"
                 ? `Semgrep: ${scanResult.semgrep ?? "ok"} · Gemini: ${scanResult.gemini ?? "ok"}`
-                : "Sem resposta do backend",
+                : (lang === "en" ? "No backend response" : "Sem resposta do backend"),
           }
         }
         if (s.port === "8002") {
@@ -91,8 +91,8 @@ export default function DevOpsPage() {
             latency: guardResult.status === "online" ? guardResult.latency : undefined,
             detail:
               guardResult.status === "online"
-                ? `Motor 3 Camadas · Gemini: ${guardResult.gemini_configurado ? "Ativo" : "Fallback L1"}`
-                : "Sem resposta do backend",
+                ? `3-Layer Engine · Gemini: ${guardResult.gemini_configurado ? (lang === "en" ? "Active" : "Ativo") : "Fallback L1"}`
+                : (lang === "en" ? "No backend response" : "Sem resposta do backend"),
           }
         }
         return s
@@ -101,7 +101,7 @@ export default function DevOpsPage() {
 
     setLastCheck(new Date())
     setChecking(false)
-  }, [])
+  }, [lang])
 
   useEffect(() => {
     runHealthCheck()
@@ -109,27 +109,27 @@ export default function DevOpsPage() {
 
   const dockerInfoCards = [
     {
-      label: "Orquestração",
+      label: t.devops.orchestration,
       value: "docker-compose.yml",
-      sub: "3 containers gerenciados",
+      sub: t.devops.orchestrationSub,
       icon: Layers,
     },
     {
-      label: "Rede Interna",
+      label: t.devops.internalNetwork,
       value: "bridge driver",
-      sub: "Isolamento de tráfego",
+      sub: t.devops.internalNetworkSub,
       icon: Network,
     },
     {
-      label: "Backend Base",
+      label: t.devops.backendBase,
       value: "FastAPI + Uvicorn",
-      sub: "Python 3.12 engine",
+      sub: t.devops.backendBaseSub,
       icon: Cpu,
     },
     {
-      label: "Frontend Base",
+      label: t.devops.frontendBase,
       value: "Next.js 16",
-      sub: "Standalone build",
+      sub: t.devops.frontendBaseSub,
       icon: Container,
     },
   ]
@@ -139,7 +139,7 @@ export default function DevOpsPage() {
       {/* ── BARRA SUPERIOR DE DEVOPS ────────────────────────────────────────── */}
       <div className="saas-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-primary/10 text-primary border border-primary/20">
             <Activity className="h-5 w-5" />
           </div>
           <div>
@@ -147,7 +147,9 @@ export default function DevOpsPage() {
               DevOps & Pipeline Security
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Políticas de bloqueio de CI/CD, Quality Gate e saúde da infraestrutura
+              {lang === "en"
+                ? "CI/CD blocking policies, Quality Gate, and infrastructure health"
+                : "Políticas de bloqueio de CI/CD, Quality Gate e saúde da infraestrutura"}
             </p>
           </div>
         </div>
@@ -157,10 +159,10 @@ export default function DevOpsPage() {
           id="btn-recheck-health"
           onClick={runHealthCheck}
           disabled={checking}
-          className="btn-electric px-3.5 py-1.5 text-xs font-bold shrink-0 disabled:opacity-50 flex items-center gap-2 rounded-lg"
+          className="btn-electric px-3.5 py-1.5 text-xs font-bold shrink-0 disabled:opacity-50 flex items-center gap-2"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", checking && "animate-spin")} />
-          <span>{checking ? "Verificando..." : "Testar Serviços"}</span>
+          <span>{checking ? (lang === "en" ? "Checking..." : "Verificando...") : (lang === "en" ? "Test Services" : "Testar Serviços")}</span>
         </button>
       </div>
 
@@ -171,7 +173,7 @@ export default function DevOpsPage() {
       <div className="space-y-3">
         <h2 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1 flex items-center gap-2">
           <Server className="h-3.5 w-3.5 text-primary" />
-          <span>Status dos Serviços & Motores ASPM</span>
+          <span>{lang === "en" ? "Service & ASPM Engines Status" : "Status dos Serviços & Motores ASPM"}</span>
         </h2>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -179,49 +181,55 @@ export default function DevOpsPage() {
             const isOnline = svc.status === "online"
             const isChecking = svc.status === "checking"
 
+            const desc = svc.port === "8002"
+              ? (lang === "en" ? "Real-time LLM Protection, Regex L1 & AI L2" : "Proteção LLM em Tempo Real, Regex L1 & IA L2")
+              : svc.port === "3000"
+              ? (lang === "en" ? "ZettaDash UI & ASPM Telemetry" : "ZettaDash UI & Telemetria ASPM")
+              : svc.desc
+
             return (
               <div
                 key={svc.name}
                 className={cn(
-                  "saas-card p-4 space-y-3 border-l-[3px] rounded-xl transition-all",
+                  "saas-card p-4 space-y-3 border-l-[3px] transition-all",
                   isOnline ? "border-l-emerald-500" : isChecking ? "border-l-amber-500" : "border-l-rose-500"
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-muted/60 border border-border rounded-lg text-primary mt-0.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-muted/60 border border-border rounded text-primary mt-0.5">
                       {svc.port === "8000" ? <Server className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
                     </div>
                     <div className="min-w-0">
                       <p className="font-mono text-xs font-bold text-foreground truncate">{svc.name}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{svc.desc}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
                     </div>
                   </div>
 
                   <div className="shrink-0">
                     {isChecking ? (
                       <span className="flex items-center gap-1.5 bg-muted px-2.5 py-1 text-[10px] font-bold text-muted-foreground rounded">
-                        <RefreshCw className="h-3 w-3 animate-spin" /> Verificando
+                        <RefreshCw className="h-3 w-3 animate-spin" /> {lang === "en" ? "Checking" : "Verificando"}
                       </span>
                     ) : isOnline ? (
                       <span className="flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-400 border border-emerald-500/30 rounded">
-                        <CheckCircle2 className="h-3 w-3" /> Online
+                        <CheckCircle2 className="h-3 w-3" /> {t.devops.online}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1.5 bg-rose-500/10 px-2.5 py-1 text-[10px] font-bold text-rose-400 border border-rose-500/30 rounded">
-                        <XCircle className="h-3 w-3" /> Offline
+                        <XCircle className="h-3 w-3" /> {t.devops.offline}
                       </span>
                     )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                  <div className="bg-muted/30 px-3 py-2 rounded-lg border border-border">
-                    <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Porta</p>
+                  <div className="bg-muted/30 px-3 py-2 rounded border border-border">
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">{t.devops.port}</p>
                     <p className="font-mono font-bold text-foreground mt-0.5">{svc.port}</p>
                   </div>
-                  <div className="bg-muted/30 px-3 py-2 rounded-lg border border-border">
-                    <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Latência</p>
+                  <div className="bg-muted/30 px-3 py-2 rounded border border-border">
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">{t.devops.latency}</p>
                     <p className="font-mono font-bold text-foreground mt-0.5">
                       {svc.latency != null ? (
                         <span className={svc.latency < 200 ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
@@ -241,15 +249,15 @@ export default function DevOpsPage() {
       <div className="space-y-3">
         <h2 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground px-1 flex items-center gap-2">
           <Cpu className="h-3.5 w-3.5 text-primary" />
-          <span>Arquitetura de Infraestrutura & Containers</span>
+          <span>{lang === "en" ? "Infrastructure & Container Architecture" : "Arquitetura de Infraestrutura & Containers"}</span>
         </h2>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {dockerInfoCards.map((c) => {
             const Icon = c.icon
             return (
-              <div key={c.label} className="saas-card p-3.5 flex items-center gap-3 rounded-xl">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
+              <div key={c.label} className="saas-card p-3.5 flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-primary/10 text-primary border border-primary/20">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">

@@ -166,8 +166,11 @@ def clonar_repositorio(repo_url: str, token: str) -> str:
     if not url_base.endswith(".git"):
         url_base += ".git"
 
-    # URL autenticada — NUNCA deve aparecer em logs ou mensagens de erro
-    url_autenticada = url_base.replace("https://", f"https://{token}@", 1)
+    # URL autenticada (se token fornecido) — NUNCA deve aparecer em logs ou mensagens de erro
+    if token and token.strip():
+        url_autenticada = url_base.replace("https://", f"https://{token.strip()}@", 1)
+    else:
+        url_autenticada = url_base
 
     logger.info("[ZettaScan] Clonando repositório: %s ...", nome_repo)
 

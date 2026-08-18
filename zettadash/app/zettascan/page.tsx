@@ -240,7 +240,7 @@ function ZettaScanInner() {
             </span>
             <span>•</span>
             <span className="text-foreground font-bold">
-              {vulns.length} achados
+              {vulns.length} {vulns.length === 1 ? t.scan.findingWordSingle : t.scan.findingsWord}
             </span>
           </div>
         </div>
@@ -252,8 +252,8 @@ function ZettaScanInner() {
             id="btn-attack-paths"
             onClick={handleOpenAttackPaths}
             disabled={loadingPaths}
-            className="px-3 py-1.5 rounded-lg border border-border bg-card hover:border-primary/60 text-foreground text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
-            title="Visualizar Grafo de Ataque Correlacionado"
+            className="px-3 py-1.5 rounded border border-border bg-card hover:border-primary text-foreground text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
+            title={t.attackPath.buttonOpen}
           >
             <Flame className="h-3.5 w-3.5 text-rose-500" />
             <span>Attack Paths</span>
@@ -268,8 +268,8 @@ function ZettaScanInner() {
           <button
             id="btn-dast-scanner"
             onClick={() => setShowDastModal(true)}
-            className="px-3 py-1.5 rounded-lg border border-border bg-card hover:border-primary/60 text-foreground text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
-            title="Executar Teste Dinâmico em URL"
+            className="px-3 py-1.5 rounded border border-border bg-card hover:border-primary text-foreground text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
+            title={t.dast.buttonOpen}
           >
             <Globe className="h-3.5 w-3.5 text-primary" />
             <span>DAST</span>
@@ -282,17 +282,17 @@ function ZettaScanInner() {
               type="button"
               onClick={(e) => { e.stopPropagation(); setShowExportMenu(s => !s) }}
               disabled={exporting}
-              className="px-3 py-1.5 rounded-lg border border-border bg-card hover:border-primary/60 text-foreground text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+              className="px-3 py-1.5 rounded border border-border bg-card hover:border-primary text-foreground text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
             >
               {exportDone ? (
-                <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Baixado</>
+                <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> {t.scan.exportSuccess}</>
               ) : (
-                <><Download className="h-3.5 w-3.5 text-muted-foreground" /> Exportar <ChevronDown className="h-3 w-3 opacity-60" /></>
+                <><Download className="h-3.5 w-3.5 text-muted-foreground" /> {t.scan.exportReport} <ChevronDown className="h-3 w-3 opacity-60" /></>
               )}
             </button>
 
             {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1.5 z-50 bg-card border border-border shadow-xl rounded-xl min-w-[200px] py-1 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute right-0 top-full mt-1.5 z-50 bg-card border border-border shadow-xl rounded min-w-[200px] py-1 animate-in fade-in zoom-in-95 duration-150">
                 <button
                   type="button"
                   id="export-json-btn"
@@ -301,8 +301,8 @@ function ZettaScanInner() {
                 >
                   <FileJson className="h-4 w-4 text-primary" />
                   <div>
-                    <p className="font-bold text-foreground">Relatório JSON</p>
-                    <p className="text-[10px] text-muted-foreground">ASPM Completo</p>
+                    <p className="font-bold text-foreground">{t.scan.exportJson}</p>
+                    <p className="text-[10px] text-muted-foreground">ASPM</p>
                   </div>
                 </button>
                 <button
@@ -313,8 +313,8 @@ function ZettaScanInner() {
                 >
                   <FileText className="h-4 w-4 text-violet-400" />
                   <div>
-                    <p className="font-bold text-foreground">SBOM CycloneDX</p>
-                    <p className="text-[10px] text-muted-foreground">Padrão 1.4 Compliance</p>
+                    <p className="font-bold text-foreground">{t.scan.exportSbom}</p>
+                    <p className="text-[10px] text-muted-foreground">{t.scan.exportSbomDesc}</p>
                   </div>
                 </button>
               </div>
@@ -324,9 +324,9 @@ function ZettaScanInner() {
           {/* Atalho Configurações */}
           <Link
             href="/configuracoes"
-            className="btn-electric px-3 py-1.5 text-xs font-bold rounded-lg shrink-0 flex items-center gap-1.5"
+            className="btn-electric px-3.5 py-1.5 text-xs font-bold shrink-0 flex items-center gap-1.5"
           >
-            <span>Novo Repo</span> <ArrowRight className="h-3 w-3" />
+            <span>{t.repoSelector.connectNew}</span> <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
       </div>
@@ -336,10 +336,10 @@ function ZettaScanInner() {
         {/* Tabs de Origem (SAST / SCA / IaC / DAST) */}
         <div className="flex items-center gap-1 overflow-x-auto">
           {[
-            { id: "ALL" as OriginFilter, label: "Todos", count: vulns.length },
-            { id: "codigo" as OriginFilter, label: "SAST", count: originCounts.codigo },
-            { id: "dependencia" as OriginFilter, label: "SCA", count: originCounts.dependencia },
-            { id: "iac" as OriginFilter, label: "IaC", count: originCounts.iac },
+            { id: "ALL" as OriginFilter, label: t.scan.filterAll, count: vulns.length },
+            { id: "codigo" as OriginFilter, label: t.scan.originSast, count: originCounts.codigo },
+            { id: "dependencia" as OriginFilter, label: t.scan.originSca, count: originCounts.dependencia },
+            { id: "iac" as OriginFilter, label: t.scan.originIac, count: originCounts.iac },
             ...(originCounts.dast > 0 ? [{ id: "dast" as OriginFilter, label: "DAST", count: originCounts.dast }] : []),
           ].map((tab) => {
             const active = originFilter === tab.id
@@ -348,7 +348,7 @@ function ZettaScanInner() {
                 key={tab.id}
                 onClick={() => setOriginFilter(tab.id)}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap",
+                  "px-3 py-1.5 text-xs font-bold rounded transition-all flex items-center gap-1.5 whitespace-nowrap",
                   active
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
@@ -369,12 +369,12 @@ function ZettaScanInner() {
         {/* Filtros de Severidade & Busca */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           {/* Pills de Severidade Rápidas */}
-          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border">
+          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded border border-border">
             {[
-              { id: "ALL", label: "Todas", count: vulns.length },
-              { id: "CRITICAL", label: "Crítica", count: counts.CRITICAL, color: "text-rose-400" },
-              { id: "HIGH", label: "Alta", count: counts.HIGH, color: "text-amber-400" },
-              { id: "MEDIUM", label: "Média", count: counts.MEDIUM, color: "text-indigo-400" },
+              { id: "ALL", label: t.scan.allTabs, count: vulns.length },
+              { id: "CRITICAL", label: t.scan.critical, count: counts.CRITICAL, color: "text-rose-400" },
+              { id: "HIGH", label: t.scan.high, count: counts.HIGH, color: "text-amber-400" },
+              { id: "MEDIUM", label: t.scan.medium, count: counts.MEDIUM, color: "text-indigo-400" },
             ].map((s) => {
               const active = filter === s.id
               return (
@@ -400,10 +400,10 @@ function ZettaScanInner() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Filtrar arquivo ou falha..."
+              placeholder={t.scan.searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+              className="w-full pl-8 pr-7 py-1.5 text-xs rounded border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
             />
             {search && (
               <button
@@ -429,7 +429,7 @@ function ZettaScanInner() {
                 {t.scan.noVulnFound}
               </p>
               <p className="text-xs text-muted-foreground">
-                Nenhuma vulnerabilidade correspondente aos filtros selecionados.
+                {t.scan.noVulnSub}
               </p>
             </div>
             {(search || filter !== "ALL" || originFilter !== "ALL") && (
@@ -440,9 +440,9 @@ function ZettaScanInner() {
                   setFilter("ALL")
                   setOriginFilter("ALL")
                 }}
-                className="btn-electric px-4 py-1.5 text-xs font-bold rounded-lg shadow-sm"
+                className="btn-electric px-4 py-1.5 text-xs font-bold rounded shadow-sm"
               >
-                Limpar Busca e Filtros
+                {t.scan.filterAll}
               </button>
             )}
           </div>

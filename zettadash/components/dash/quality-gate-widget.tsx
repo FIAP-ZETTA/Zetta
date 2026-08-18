@@ -90,7 +90,7 @@ jobs:
       await navigator.clipboard.writeText(workflowCode)
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
-    } catch {}
+    } catch { }
   }
 
   const handleDownloadWorkflow = () => {

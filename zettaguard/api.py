@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 
 from detector import analyze_input, analyze_output
 from event_store import event_store
-from patterns import CATEGORY_LABELS, SCORE_THRESHOLDS
+from patterns import ALL_INPUT_PATTERNS, ALL_OUTPUT_PATTERNS, CATEGORY_LABELS, SCORE_THRESHOLDS
 
 load_dotenv()
 
@@ -347,8 +347,8 @@ async def health():
             "layer2_ai": api_key_ok,
             "layer3_output": True,
         },
-        "total_patterns": 21,  # padrões de entrada (INJECTION + JAILBREAK + EXFILTRATION)
-        "total_output_patterns": 6,
+        "total_patterns": len(ALL_INPUT_PATTERNS),
+        "total_output_patterns": len(ALL_OUTPUT_PATTERNS),
     }
 
 

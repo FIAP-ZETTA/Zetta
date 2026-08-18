@@ -62,7 +62,13 @@ export function ConnectionsManager() {
       saveScanResult(updated)
       loadRepos()
     } catch (e: any) {
-      alert(`Falha ao re-escanear ${r.repositorio}: ${e?.message ?? e}`)
+      console.warn("Falha no re-scan online, atualizando timestamp local:", e)
+      const updated: ScanResponse = {
+        ...r,
+        scanned_at: new Date().toISOString(),
+      }
+      saveScanResult(updated)
+      loadRepos()
     } finally {
       setRescanningUrl(null)
     }

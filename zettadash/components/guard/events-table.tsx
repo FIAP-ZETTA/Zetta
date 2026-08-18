@@ -6,13 +6,10 @@ import {
   ShieldCheck,
   AlertTriangle,
   Search,
-  Filter,
   Trash2,
-  ExternalLink,
   ChevronDown,
   ChevronUp,
   Clock,
-  Code2,
 } from "lucide-react"
 import {
   getSecurityEvents,
@@ -23,7 +20,7 @@ import { useLanguage } from "@/lib/language-provider"
 import { cn } from "@/lib/utils"
 
 export function EventsTable() {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const [events, setEvents] = useState<SecurityEvent[]>([])
   const [total, setTotal] = useState<number>(0)
   const [searchTerm, setSearchTerm] = useState<string>("")
@@ -45,7 +42,7 @@ export function EventsTable() {
   }, [loadEvents])
 
   const handleClear = () => {
-    if (confirm("Deseja realmente limpar todo o histórico de eventos do ZettaGuard?")) {
+    if (confirm(lang === "en" ? "Clear all security event history?" : "Deseja limpar o histórico de eventos?")) {
       clearSecurityEvents()
       loadEvents()
     }
@@ -67,74 +64,75 @@ export function EventsTable() {
   return (
     <div className="saas-card overflow-hidden">
       {/* Table Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
         <div>
-          <h3 className="font-heading text-sm font-bold text-foreground uppercase tracking-wider">
+          <h2 className="font-heading text-sm font-bold text-foreground uppercase tracking-wider">
             {t.guard.incidentLog}
-          </h3>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
             {t.guard.securityEvents}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="bg-muted px-2.5 py-1 text-[11px] font-mono font-bold text-foreground border border-border rounded">
-            {filteredEvents.length} de {total} eventos
+          <span className="bg-muted px-2.5 py-1 text-[10px] font-mono font-bold text-primary border border-primary/30 rounded">
+            {lang === "en"
+              ? `${filteredEvents.length} of ${total} events`
+              : `${filteredEvents.length} de ${total} eventos`}
           </span>
 
           <button
             onClick={handleClear}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:border-primary border border-border bg-card transition-colors"
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            Limpar
+            <Trash2 className="h-3 w-3" />
+            {lang === "en" ? "Clear" : "Limpar"}
           </button>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-2.5 p-3.5 border-b border-border bg-muted/20 text-xs">
+      <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border bg-muted/20 text-xs">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Filtrar por padrão, prompt ou categoria..."
+            placeholder={lang === "en" ? "Filter by pattern, text or category..." : "Filtrar por padrão, texto ou categoria..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded border border-border bg-card pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="w-full rounded border border-border bg-card pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
           />
         </div>
 
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded border border-border bg-card px-2.5 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none"
+          className="rounded border border-border bg-card px-2.5 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
         >
-          <option value="all">Todas as Categorias</option>
+          <option value="all">{lang === "en" ? "All Categories" : "Todas as Categorias"}</option>
           <option value="injection_direct">Prompt Injection</option>
-          <option value="jailbreak">Jailbreak (DAN)</option>
-          <option value="exfiltration">Exfiltração de Dados</option>
-          <option value="injection_indirect">Injeção Indireta</option>
-          <option value="data_leakage">Data Leakage</option>
-          <option value="none">Seguro / Limpo</option>
+          <option value="jailbreak">Jailbreak</option>
+          <option value="exfiltration">{lang === "en" ? "Exfiltration" : "Exfiltração"}</option>
+          <option value="injection_indirect">{lang === "en" ? "Indirect Injection" : "Injeção Indireta"}</option>
+          <option value="data_leakage">{lang === "en" ? "Output Leakage" : "Vazamento de Saída"}</option>
+          <option value="none">{lang === "en" ? "Safe" : "Seguro"}</option>
         </select>
 
         <select
           value={decisionFilter}
           onChange={(e) => setDecisionFilter(e.target.value)}
-          className="rounded border border-border bg-card px-2.5 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none"
+          className="rounded border border-border bg-card px-2.5 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
         >
-          <option value="all">Todas as Decisões</option>
-          <option value="Bloqueado">Bloqueados</option>
-          <option value="Em análise">Em análise</option>
-          <option value="Permitido">Permitidos</option>
+          <option value="all">{lang === "en" ? "All Decisions" : "Todas as Decisões"}</option>
+          <option value="Bloqueado">{t.guard.decisionBlocked}</option>
+          <option value="Em análise">{t.guard.decisionReview}</option>
+          <option value="Permitido">{t.guard.decisionAllowed}</option>
         </select>
       </div>
 
       {/* Table Body */}
       {filteredEvents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
-          <ShieldCheck className="h-8 w-8 text-muted-foreground/30" />
+        <div className="flex flex-col items-center justify-center gap-1.5 py-12 text-center text-muted-foreground">
           <p className="text-xs">{t.guard.noEvents}</p>
           <p className="text-[11px] text-muted-foreground/70">
             {t.guard.noEventsSub}
@@ -147,56 +145,45 @@ export function EventsTable() {
             const isBlocked = evt.decision === "Bloqueado"
             const isReview = evt.decision === "Em análise"
 
+            const decisionLabel = isBlocked
+              ? t.guard.decisionBlocked
+              : isReview
+              ? t.guard.decisionReview
+              : t.guard.decisionAllowed
+
             return (
               <div
                 key={evt.id}
                 className={cn(
-                  "p-4 transition-colors hover:bg-muted/30 cursor-pointer",
-                  isExpanded && "bg-muted/40"
+                  "p-3.5 transition-all hover:bg-primary/[0.03] cursor-pointer",
+                  isExpanded && "bg-primary/[0.05]"
                 )}
                 onClick={() => setExpandedEventId(isExpanded ? null : evt.id)}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0 flex-1">
-                    <div
-                      className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
-                        isBlocked
-                          ? "bg-rose-500/10 border-rose-500/30 text-rose-400"
-                          : isReview
-                          ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
-                          : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                      )}
-                    >
-                      {isBlocked ? (
-                        <ShieldAlert className="h-4 w-4" />
-                      ) : isReview ? (
-                        <AlertTriangle className="h-4 w-4" />
-                      ) : (
-                        <ShieldCheck className="h-4 w-4" />
-                      )}
-                    </div>
-
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-foreground">
                           {evt.category_label || evt.category}
                         </span>
+
                         <span
                           className={cn(
-                            "text-[9px] font-mono font-bold px-1.5 py-0.2 rounded",
+                            "text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border",
                             isBlocked
-                              ? "bg-rose-500 text-white"
+                              ? "border-rose-500/30 text-rose-400 bg-rose-500/10"
                               : isReview
-                              ? "bg-amber-500 text-black font-bold"
-                              : "bg-emerald-500 text-white"
+                              ? "border-amber-500/30 text-amber-400 bg-amber-500/10"
+                              : "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
                           )}
                         >
-                          {evt.decision}
+                          {decisionLabel}
                         </span>
+
                         <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {new Date(evt.timestamp).toLocaleTimeString("pt-BR")}
+                          <Clock className="h-3 w-3 text-muted-foreground" />
+                          {new Date(evt.timestamp).toLocaleTimeString(lang === "en" ? "en-US" : "pt-BR")}
                         </span>
                       </div>
 
@@ -206,7 +193,7 @@ export function EventsTable() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-4 shrink-0">
                     <div className="text-right">
                       <span className="text-[10px] text-muted-foreground block">
                         Score
@@ -227,9 +214,9 @@ export function EventsTable() {
 
                     <button className="text-muted-foreground hover:text-foreground">
                       {isExpanded ? (
-                        <ChevronUp className="h-4 w-4" />
+                        <ChevronUp className="h-3.5 w-3.5 text-primary" />
                       ) : (
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="h-3.5 w-3.5" />
                       )}
                     </button>
                   </div>
@@ -238,28 +225,32 @@ export function EventsTable() {
                 {/* Expanded Details Drawer */}
                 {isExpanded && (
                   <div
-                    className="mt-3 pt-3 border-t border-border/60 text-xs space-y-2.5 animate-in fade-in duration-200"
+                    className="mt-3 pt-3 border-t border-border text-xs space-y-2 animate-in fade-in duration-150"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="p-3 rounded bg-card border border-border space-y-1.5 font-mono">
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>Direção: {evt.direction === "input" ? "Entrada (Prompt)" : "Saída (LLM)"}</span>
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span>
+                          {lang === "en"
+                            ? `Direction: ${evt.direction === "input" ? "Input (Prompt)" : "Output (LLM)"}`
+                            : `Direção: ${evt.direction === "input" ? "Entrada (Prompt)" : "Saída (LLM)"}`}
+                        </span>
                         <span>ID: {evt.id}</span>
                       </div>
-                      <p className="text-foreground text-xs whitespace-pre-wrap">
+                      <p className="text-foreground text-xs whitespace-pre-wrap leading-relaxed">
                         {evt.prompt_snippet}
                       </p>
                     </div>
 
                     {evt.matched_patterns && evt.matched_patterns.length > 0 && (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] text-muted-foreground font-bold">
-                          Padrões L1 disparados:
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-muted-foreground font-bold">
+                          {lang === "en" ? "L1 Patterns:" : "Padrões L1:"}
                         </span>
                         {evt.matched_patterns.map((pat) => (
                           <span
                             key={pat}
-                            className="font-mono text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded"
+                            className="font-mono text-[10px] text-rose-400 px-1.5 py-0.2 rounded border border-rose-500/30 bg-rose-500/10 font-bold"
                           >
                             {pat}
                           </span>
@@ -268,12 +259,12 @@ export function EventsTable() {
                     )}
 
                     {evt.ai_classification && (
-                      <div className="p-2.5 rounded bg-primary/5 border border-primary/20 text-[11px] space-y-1">
-                        <span className="font-bold text-primary flex items-center gap-1.5">
-                          🤖 Classificação L2 (Gemini):
+                      <div className="p-2.5 rounded bg-card border border-border text-[11px] space-y-0.5">
+                        <span className="text-[10px] text-primary font-bold font-mono block">
+                          {lang === "en" ? "L2 Classification (Gemini)" : "Classificação L2 (Gemini)"}
                         </span>
                         <p className="text-foreground">
-                          {evt.ai_classification.razao} (Confiança: {(evt.ai_classification.confianca * 100).toFixed(0)}%, Risco: {evt.ai_classification.risco})
+                          {evt.ai_classification.razao} ({t.guard.confidence}: {(evt.ai_classification.confianca * 100).toFixed(0)}%)
                         </p>
                       </div>
                     )}
