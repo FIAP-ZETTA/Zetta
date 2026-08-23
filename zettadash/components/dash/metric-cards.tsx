@@ -112,22 +112,35 @@ export function MetricCards({
 
   if (!metrics) {
     return (
-      <div className="grid grid-cols-2 gap-3.5 h-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 h-full">
         {[
-          { label: t.dash.totalDetected, icon: Layers, color: "text-primary" },
-          { label: t.dash.highRisk, icon: AlertTriangle, color: "text-amber-500" },
-          { label: t.dash.criticalVulns, icon: ShieldAlert, color: "text-rose-500" },
-          { label: "MÉDIAS & BAIXAS", icon: Zap, color: "text-purple-400" },
+          { label: t.dash.totalDetected, icon: Layers, color: "text-primary", border: "border-l-primary/30" },
+          { label: t.dash.highRisk, icon: AlertTriangle, color: "text-amber-500", border: "border-l-amber-500/30" },
+          { label: t.dash.criticalVulns, icon: ShieldAlert, color: "text-rose-500", border: "border-l-rose-500/30" },
+          { label: "MÉDIAS & BAIXAS", icon: Zap, color: "text-purple-400", border: "border-l-purple-500/30" },
         ].map((c) => {
           const Icon = c.icon
           return (
-            <div key={c.label} className="saas-card p-4 sm:p-5 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
+            <div
+              key={c.label}
+              className={cn(
+                "saas-card p-4 sm:p-5 border-l-[3px] space-y-2.5 flex flex-col justify-between",
+                c.border
+              )}
+            >
+              <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{c.label}</span>
                 <Icon className={cn("h-4 w-4", c.color, "opacity-40")} />
               </div>
-              <p className="font-heading text-3xl font-extrabold text-muted-foreground/30">—</p>
-              <p className="text-[10px] text-muted-foreground/50 mt-1">{t.dash.waitingScan}</p>
+
+              <div>
+                <p className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight text-muted-foreground/30">—</p>
+                <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t.dash.waitingScan}</p>
+              </div>
+
+              <div className="h-1 w-full bg-muted/60 overflow-hidden rounded-full">
+                <div className="h-full bg-muted-foreground/10 w-0" />
+              </div>
             </div>
           )
         })}

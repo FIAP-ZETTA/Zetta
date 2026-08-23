@@ -56,7 +56,21 @@ export function RepoSelector({ onSelect, className }: RepoSelectorProps) {
   }
 
   if (repos.length === 0) {
-    return null
+    return (
+      <div className={cn("flex items-center gap-2", className)}>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground hidden sm:inline-block">
+          {t.repoSelector.label}
+        </span>
+        <Link
+          href="/configuracoes"
+          className="flex items-center gap-2 bg-muted/30 border border-border hover:border-primary/50 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-all shadow-sm rounded-lg"
+        >
+          <GitBranch className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+          <span>Nenhum repositório conectado</span>
+          <Plus className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
+        </Link>
+      </div>
+    )
   }
 
   const selectedRepoObj = repos.find(

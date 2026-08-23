@@ -96,12 +96,104 @@ export function ComplianceKpis() {
 
   if (!hasScan) {
     return (
-      <div className="saas-card p-5">
-        <h3 className="font-heading text-sm font-bold text-foreground">{t.compliance.title}</h3>
-        <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">{t.compliance.subtitle}</p>
-        <div className="flex flex-col items-center justify-center py-8 text-center space-y-2">
-          <BarChart3 className="h-8 w-8 text-muted-foreground/40" />
-          <p className="text-xs text-muted-foreground">{t.compliance.noData}</p>
+      <div className="saas-card overflow-hidden h-full flex flex-col justify-between">
+        {/* Header */}
+        <div className="p-4 sm:p-5 border-b border-border">
+          <h3 className="font-heading text-sm font-bold text-foreground">{t.compliance.title}</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5">{t.compliance.subtitle}</p>
+        </div>
+
+        {/* KPI Grid */}
+        <div className="grid grid-cols-2 divide-x divide-y divide-border flex-1">
+          {/* MTTR */}
+          <div className="p-4 space-y-1.5 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {t.compliance.mttr}
+              </span>
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 border text-xs font-bold bg-muted/30 border-border text-muted-foreground">
+                — {t.compliance.mttrUnit}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">{t.dash.waitingScan}</p>
+            </div>
+          </div>
+
+          {/* Trend */}
+          <div className="p-4 space-y-1.5 flex flex-col justify-between">
+            <div className="flex items-center gap-1.5">
+              <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {t.compliance.trend}
+              </span>
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 border text-xs font-bold bg-muted/30 border-border text-muted-foreground">
+                <Minus className="h-3.5 w-3.5" />
+                —
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">Aguardando histórico</p>
+            </div>
+          </div>
+
+          {/* OWASP Coverage */}
+          <div className="p-4 space-y-2 col-span-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  {t.compliance.owaspScore}
+                </span>
+              </div>
+              <span className="text-xs font-bold text-muted-foreground/60 tabular-nums">
+                0/10
+              </span>
+            </div>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-muted-foreground/20 w-0" />
+            </div>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {OWASP_CATEGORIES.map(cat => (
+                <span
+                  key={cat.id}
+                  className="text-[9px] font-mono px-1 py-0.5 border bg-muted/30 border-border/60 text-muted-foreground/40"
+                  title={cat.label}
+                >
+                  {cat.id}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Critical Ratio */}
+          <div className="p-4 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {t.compliance.criticalRatio}
+              </span>
+            </div>
+            <p className="font-heading text-2xl font-extrabold text-muted-foreground/40 tabular-nums">
+              —%
+            </p>
+            <p className="text-[10px] text-muted-foreground">{t.dash.waitingScan}</p>
+          </div>
+
+          {/* Repos auditados */}
+          <div className="p-4 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {t.compliance.totalScanned}
+              </span>
+            </div>
+            <p className="font-heading text-2xl font-extrabold text-muted-foreground/50 tabular-nums">
+              {repoCount}
+            </p>
+            <p className="text-[10px] text-muted-foreground">{t.compliance.totalScanned}</p>
+          </div>
         </div>
       </div>
     )

@@ -201,19 +201,32 @@ export function AdvancedCharts() {
 
   if (!scanResult) {
     return (
-      <div className="saas-card p-5 space-y-4 h-full flex flex-col justify-between">
-        <div className="flex items-center justify-between">
-          <h2 className="font-heading text-sm font-bold uppercase tracking-wider text-foreground">
-            {t.dash.chartAnalytics}
-          </h2>
+      <div className="saas-card p-4 sm:p-5 space-y-4 h-full flex flex-col justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
+          <div>
+            <h2 className="font-heading text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              {t.dash.chartAnalytics}
+            </h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {t.dash.severityDistribution}
+            </p>
+          </div>
         </div>
-        <div className="flex flex-1 min-h-[320px] flex-col items-center justify-center gap-2 border border-dashed border-border bg-muted/20 rounded-xl">
-          <BarChart3 className="h-8 w-8 text-muted-foreground/30" />
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground">{t.dash.waitingAuditData}</p>
+
+        <div className="relative flex flex-1 min-h-[300px] flex-col items-center justify-center gap-3 border border-dashed border-border bg-muted/20 rounded-xl p-6">
+          {/* Silhouette bars */}
+          <div className="flex items-end gap-3 h-24 opacity-20 pointer-events-none">
+            <div className="w-8 h-16 bg-rose-500 rounded-t" />
+            <div className="w-8 h-20 bg-amber-500 rounded-t" />
+            <div className="w-8 h-12 bg-indigo-500 rounded-t" />
+            <div className="w-8 h-8 bg-sky-500 rounded-t" />
+          </div>
+          <div className="text-center z-10">
+            <p className="text-xs text-muted-foreground font-semibold">{t.dash.waitingAuditData}</p>
             <Link
               href="/configuracoes"
-              className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline font-bold"
+              className="mt-2.5 inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-bold bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-lg"
             >
               {t.dash.connectRepo} <ArrowRight className="h-3 w-3" />
             </Link>

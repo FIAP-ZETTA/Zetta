@@ -53,11 +53,11 @@ export function RecentActivity() {
   }, [refresh])
 
   return (
-    <div className="saas-card p-5 space-y-4">
-      <div className="flex items-start justify-between gap-2">
+    <div className="saas-card p-4 sm:p-5 space-y-3.5 h-full flex flex-col justify-between">
+      <div className="flex items-start justify-between gap-2 border-b border-border pb-3">
         <div>
-          <h2 className="font-heading text-sm font-bold uppercase tracking-wider text-foreground">{t.dash.topCritical}</h2>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <h2 className="font-heading text-xs font-bold uppercase tracking-wider text-foreground">{t.dash.topCritical}</h2>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
             {items ? t.dash.totalFindingsRecorded.replace("{total}", String(total)) : t.dash.noScanExecuted}
           </p>
         </div>
@@ -72,9 +72,9 @@ export function RecentActivity() {
       </div>
 
       {!items ? (
-        <div className="flex flex-col items-center justify-center py-10 gap-2 text-center">
+        <div className="flex flex-1 min-h-[220px] flex-col items-center justify-center py-6 gap-2 text-center border border-dashed border-border bg-muted/20 rounded-xl">
           <ShieldOff className="h-7 w-7 text-muted-foreground/30" />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground max-w-xs">
             {t.dash.runScanToView}
           </p>
           <Link

@@ -52,12 +52,12 @@ export default function ZettaDashDashboardPage() {
       {/* ── LINHA 2: POSTURA DE SEGURANÇA (ESQUERDA) + KPIS (DIREITA) ────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
         {/* Esquerda: Postura de Segurança (Grau D / 12 pts) */}
-        <div className="lg:col-span-4 flex flex-col">
+        <div className="lg:col-span-5 flex flex-col">
           <RiskPostureCard />
         </div>
 
         {/* Direita: KPIs de Conformidade (MTTR, Tendência, OWASP Top 10) */}
-        <div className="lg:col-span-8 flex flex-col">
+        <div className="lg:col-span-7 flex flex-col">
           <ComplianceKpis />
         </div>
       </div>
